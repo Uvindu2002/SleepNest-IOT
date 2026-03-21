@@ -205,87 +205,64 @@ function MotionSignalChart({ motionHistory }) {
   return <canvas ref={ref} />
 }
 
-// ── Noise vs Motion correlation chart ───────────────────────────
-function CorrelationChart({ noiseHistory, motionHistory }) {
-  const ref      = useRef(null)
-  const chartRef = useRef(null)
-
+// ── Noise vs Motion — simple visual bars (no chart needed) ──────
+function NoiseMotionSimple({ noiseHistory, motionHistory }) {
   function computeCorrelation(nH, mH) {
     const len    = Math.min(nH.length, mH.length)
-    const bins   = ['0–25%', '25–50%', '50–75%', '75–100%']
     const counts = [0, 0, 0, 0]
     const motion = [0, 0, 0, 0]
     for (let i = 0; i < len; i++) {
-      const n   = nH[i].val
-      const m   = mH[i].val
-      const idx = Math.min(3, Math.floor(n / 25))
+      const idx = Math.min(3, Math.floor(nH[i].val / 25))
       counts[idx]++
-      if (m === 1) motion[idx]++
+      if (mH[i].val === 1) motion[idx]++
     }
-    return {
-      labels: bins,
-      rates: counts.map((c, i) => c === 0 ? 0 : Math.round((motion[i] / c) * 100)),
-    }
+    return counts.map((c, i) => c === 0 ? 0 : Math.round((motion[i] / c) * 100))
   }
 
-  const { labels: bLabels, rates } = computeCorrelation(noiseHistory, motionHistory)
+  const rates = computeCorrelation(noiseHistory, motionHistory)
 
-  useEffect(() => {
-    const ctx = ref.current.getContext('2d')
-    chartRef.current = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: bLabels,
-        datasets: [{
-          label: 'Motion rate',
-          data: rates,
-          borderColor: '#5A52E0',
-          backgroundColor: 'rgba(90,82,224,0.08)',
-          borderWidth: 2.5,
-          pointRadius: 5,
-          pointBackgroundColor: '#fff',
-          pointBorderColor: '#5A52E0',
-          pointBorderWidth: 2,
-          tension: 0.4,
-          fill: true,
-        }],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: { label: item => `Motion: ${item.raw}%` },
-          },
-        },
-        scales: {
-          x: {
-            grid: { display: false },
-            ticks: { color: '#94A3B8', font: { size: 10 } },
-          },
-          y: {
-            min: 0, max: 100,
-            grid: { color: 'rgba(0,0,0,0.04)' },
-            ticks: { color: '#94A3B8', font: { size: 10 }, callback: v => v + '%' },
-          },
-        },
-      },
-    })
-    return () => chartRef.current?.destroy()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const ROWS = [
+    { emoji: '🔕', label: 'Quiet',     desc: '0 – 25% noise',   color: '#3B9E72', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
+    { emoji: '🔉', label: 'Moderate',  desc: '25 – 50% noise',  color: '#0EA5E9', bg: 'bg-sky-100 dark:bg-sky-900/30'         },
+    { emoji: '🔊', label: 'Loud',      desc: '50 – 75% noise',  color: '#F59E0B', bg: 'bg-amber-100 dark:bg-amber-900/30'     },
+    { emoji: '📢', label: 'Very Loud', desc: '75 – 100% noise', color: '#EF4444', bg: 'bg-red-100 dark:bg-red-900/30'         },
+  ]
 
-  useEffect(() => {
-    if (!chartRef.current) return
-    const { rates: newRates } = computeCorrelation(noiseHistory, motionHistory)
-    chartRef.current.data.datasets[0].data = newRates
-    chartRef.current.update('none')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [noiseHistory, motionHistory])
-
-  return <canvas ref={ref} />
+  return (
+    <div className="flex flex-col gap-3 pt-1">
+      {ROWS.map(({ emoji, label, desc, color, bg }, i) => {
+        const pct = rates[i] ?? 0
+        const motionWord = pct === 0 ? 'No motion' : pct < 30 ? 'Rarely moves' : pct < 60 ? 'Sometimes moves' : 'Often moves'
+        return (
+          <div key={label} className="flex items-center gap-3">
+            {/* Icon + labels */}
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0 ${bg}`}>
+              {emoji}
+            </div>
+            <div className="w-24 flex-shrink-0">
+              <div className="text-xs font-bold text-gray-700 dark:text-gray-200">{label}</div>
+              <div className="text-[10px] text-gray-400">{desc}</div>
+            </div>
+            {/* Bar */}
+            <div className="flex-1 h-3 bg-gray-100 dark:bg-[#161928] rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-700"
+                style={{ width: `${pct}%`, backgroundColor: color }}
+              />
+            </div>
+            {/* Pct + word */}
+            <div className="w-28 flex-shrink-0 text-right">
+              <span className="text-sm font-extrabold" style={{ color }}>{pct}%</span>
+              <span className="text-[10px] text-gray-400 ml-1.5">{motionWord}</span>
+            </div>
+          </div>
+        )
+      })}
+      <p className="text-[10px] text-gray-400 mt-1 text-center">
+        📊 How often baby moves at each noise level
+      </p>
+    </div>
+  )
 }
 
 // ── Filter toggle button ─────────────────────────────────────────
@@ -386,18 +363,16 @@ export default function Monitoring() {
           </div>
         </div>
 
-        {/* Correlation: Noise vs Motion */}
+        {/* Noise vs Motion — simple visual */}
         <div className="bg-white dark:bg-[#1E2236] rounded-2xl border border-nest-border dark:border-[#2A2E4A] p-5 shadow-sm">
           <div className="mb-3">
-            <div className="text-sm font-semibold text-gray-700 dark:text-gray-200">Correlation : Noise vs Motion</div>
-            <div className="text-xs text-gray-400 mt-0.5">Motion rate per noise level bucket</div>
+            <div className="text-sm font-semibold text-gray-700 dark:text-gray-200">🔊 Noise vs Motion</div>
+            <div className="text-xs text-gray-400 mt-0.5">Does baby move more when it's loud?</div>
           </div>
-          <div className="h-44 relative">
-            {noiseHistory.length >= 4 && motionHistory.length >= 4
-              ? <CorrelationChart noiseHistory={noiseHistory} motionHistory={motionHistory} />
-              : <div className="flex items-center justify-center h-full text-sm text-gray-400">Collecting…</div>
-            }
-          </div>
+          {noiseHistory.length >= 4 && motionHistory.length >= 4
+            ? <NoiseMotionSimple noiseHistory={noiseHistory} motionHistory={motionHistory} />
+            : <div className="flex items-center justify-center h-44 text-sm text-gray-400">Collecting data…</div>
+          }
         </div>
 
       </div>

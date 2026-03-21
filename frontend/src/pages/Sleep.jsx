@@ -8,7 +8,7 @@ const SOUND_ROWS = [
 ]
 
 export default function Sleep() {
-  const { comfort, soundDist, readings, motionCount, temp, humidity } = useSensor()
+  const { comfort, soundDist, readings, motionCount, temp, humidity, light } = useSensor()
   const total    = Object.values(soundDist).reduce((a, b) => a + b, 0) || 1
   const quietPct = Math.round((soundDist.QUIET / total) * 100)
 
@@ -55,7 +55,7 @@ export default function Sleep() {
             </div>
 
             {/* 3 live stats */}
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <div className="bg-nest-green dark:bg-[#17302A] rounded-xl p-3 text-center">
                 <div className="text-xl font-extrabold text-accent">{comfort}%</div>
                 <div className="text-[10px] text-gray-400 mt-0.5">Comfort</div>
@@ -69,6 +69,12 @@ export default function Sleep() {
                   {temp != null ? `${temp.toFixed(0)}°` : '—'}
                 </div>
                 <div className="text-[10px] text-gray-400 mt-0.5">Temp</div>
+              </div>
+              <div className="bg-yellow-50 dark:bg-[#1E1A0A] rounded-xl p-3 text-center">
+                <div className="text-xl font-extrabold text-amber-500">
+                  {light ?? '—'}
+                </div>
+                <div className="text-[10px] text-gray-400 mt-0.5">☀️ Light</div>
               </div>
             </div>
           </div>

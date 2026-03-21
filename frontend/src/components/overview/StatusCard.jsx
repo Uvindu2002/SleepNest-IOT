@@ -112,7 +112,7 @@ function StatPill({ icon, value, label }) {
 
 // ── Main card ────────────────────────────────────────────────────
 export default function StatusCard({ style }) {
-  const { comfort, statusMsg, temp, humidity, db } = useSensor()
+  const { comfort, statusMsg, temp, humidity, db, light } = useSensor()
   const theme  = getTheme(comfort)
   const emoji  = comfortEmoji(comfort)
   const size   = (RADIUS + STROKE) * 2   // matches SVG size
@@ -205,7 +205,7 @@ export default function StatusCard({ style }) {
             </div>
           </div>
 
-          {/* 3 mini stats */}
+          {/* 4 mini stats */}
           <div className="flex justify-around pt-1 border-t border-black/[0.06] dark:border-white/[0.06]">
             <StatPill
               icon="🌡️"
@@ -221,6 +221,11 @@ export default function StatusCard({ style }) {
               icon="🔊"
               value={db != null ? `${db}dB` : '—'}
               label="Sound"
+            />
+            <StatPill
+              icon="☀️"
+              value={light != null ? String(light) : '—'}
+              label="Light"
             />
           </div>
         </div>

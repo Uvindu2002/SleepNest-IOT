@@ -10,7 +10,7 @@ function fmtDuration(ms) {
 
 export default function CurrentState({ style }) {
   const {
-    temp, db, soundEvent, soundLabel,
+    temp, db, soundEvent, soundLabel, light,
     motion, motionDurationMs, motionThreshold, motionExceeded, motionPenalty,
   } = useSensor()
 
@@ -30,29 +30,35 @@ export default function CurrentState({ style }) {
         </div>
       </div>
 
-      {/* Temp + dB boxes */}
-      <div className="grid grid-cols-2 gap-2">
+      {/* Temp + Sound + Light boxes */}
+      <div className="grid grid-cols-3 gap-2">
         <div className="relative overflow-hidden bg-white dark:bg-[#1E2236] border border-nest-border dark:border-[#2A2E4A] rounded-xl p-3">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-nest-green/70 to-transparent dark:from-[#17302A]/70 rounded-xl" />
           <div className="relative">
-            <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              🌡️ Temp
-            </div>
-            <div className="text-xl font-extrabold text-gray-800 dark:text-gray-100 leading-none">{fmtTemp(temp)}</div>
+            <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">🌡️ Temp</div>
+            <div className="text-lg font-extrabold text-gray-800 dark:text-gray-100 leading-none">{fmtTemp(temp)}</div>
             <div className="text-[9px] text-gray-400 mt-1">
-              {temp != null && temp > 24 ? '⚠️ Above ideal' : temp != null && temp < 18 ? '⬇️ Below ideal' : '✅ Good range'}
+              {temp != null && temp > 24 ? '⚠️ Above ideal' : temp != null && temp < 18 ? '⬇️ Below ideal' : '✅ Good'}
             </div>
           </div>
         </div>
         <div className="relative overflow-hidden bg-white dark:bg-[#1E2236] border border-nest-border dark:border-[#2A2E4A] rounded-xl p-3">
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-nest-blue/70 to-transparent dark:from-[#1A1E3A]/70 rounded-xl" />
           <div className="relative">
-            <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-              🔊 Sound
-            </div>
-            <div className="text-xl font-extrabold text-gray-800 dark:text-gray-100 leading-none">{db} dB</div>
+            <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">🔊 Sound</div>
+            <div className="text-lg font-extrabold text-gray-800 dark:text-gray-100 leading-none">{db} dB</div>
             <div className="text-[9px] text-gray-400 mt-1">
               {db < 40 ? '🔕 Very quiet' : db < 60 ? '🔉 Moderate' : '🔊 Loud'}
+            </div>
+          </div>
+        </div>
+        <div className="relative overflow-hidden bg-white dark:bg-[#1E2236] border border-nest-border dark:border-[#2A2E4A] rounded-xl p-3">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-yellow-100/80 to-transparent dark:from-[#1E1A0A]/80 rounded-xl" />
+          <div className="relative">
+            <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">☀️ Light</div>
+            <div className="text-lg font-extrabold text-gray-800 dark:text-gray-100 leading-none">{light ?? '—'}</div>
+            <div className="text-[9px] text-gray-400 mt-1">
+              {light == null ? '—' : light < 100 ? '🌑 Very dark' : light < 300 ? '🌙 Dim' : light < 600 ? '💡 Normal' : '☀️ Bright'}
             </div>
           </div>
         </div>
