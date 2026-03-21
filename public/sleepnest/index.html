@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SleepNest — Baby Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ── Sidebar ──────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">🌿</div>
+    <div class="logo-name">SleepNest</div>
+  </div>
+  <nav class="sidebar-nav">
+    <button class="nav-item active" data-page="overview">
+      <span class="nav-icon">🏠</span><span>Overview</span>
+    </button>
+    <button class="nav-item" data-page="monitoring">
+      <span class="nav-icon">📊</span><span>Monitoring</span>
+    </button>
+    <button class="nav-item" data-page="sleep">
+      <span class="nav-icon">💤</span><span>Sleep</span>
+    </button>
+    <button class="nav-item" data-page="alerts">
+      <span class="nav-icon">🔔</span><span>Alerts</span>
+    </button>
+    <button class="nav-item" data-page="history">
+      <span class="nav-icon">📋</span><span>History</span>
+    </button>
+    <button class="nav-item" data-page="babysitter">
+      <span class="nav-icon">👁️</span><span>Baby Sitter View</span>
+    </button>
+    <button class="nav-item" data-page="settings">
+      <span class="nav-icon">⚙️</span><span>Settings</span>
+    </button>
+  </nav>
+</aside>
+
+<!-- ── Main ─────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <h1 class="topbar-title">Room Comfort Dashboard</h1>
+    <button class="toggle-switch on" id="mode-toggle" title="Toggle dark mode">
+      <span class="toggle-thumb"></span>
+    </button>
+    <div class="user-pill">
+      <div class="user-avatar">S</div>
+      <div class="user-info">
+        <div class="u-name">Sara Samy</div>
+        <div class="u-status">● Online</div>
+      </div>
+    </div>
+    <button class="notif-btn" id="notif-btn">
+      🔔
+      <span class="notif-badge" id="notif-badge" style="display:none">0</span>
+    </button>
+  </div>
+
+  <!-- Page content -->
+  <div class="page-content">
+
+    <!-- ══════════ OVERVIEW ══════════ -->
+    <div class="page-view active" id="page-overview">
+      <div class="overview-layout">
+
+        <!-- Col 1: Status + mini cards -->
+        <div class="ov-left">
+
+          <div class="card card-green status-card">
+            <div class="st-label">Status</div>
+            <div class="st-msg" id="ov-status-msg">Baby is Deeply Resting</div>
+            <div class="st-body">
+              <div class="baby-emojis">😴 ✨ 🌙</div>
+              <div class="score-section">
+                <div class="score-ring" id="score-ring" style="--pct:0">
+                  <span class="score-ring-inner">
+                    <span id="ov-score">—</span>
+                    <small>Current<br>Score</small>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mini-cards">
+            <div class="card card-green mini-card">
+              <div class="mc-label">🌡 Temperature</div>
+              <div class="mc-val" id="ov-temp">—</div>
+            </div>
+            <div class="card card-blue mini-card">
+              <div class="mc-label">💧 Humidity</div>
+              <div class="mc-val" id="ov-hum">—</div>
+            </div>
+          </div>
+
+        </div><!-- /ov-left -->
+
+        <!-- Col 2: Sleep Nest donut -->
+        <div class="card sleep-nest-card">
+          <div class="sn-title">Sleep Nest</div>
+          <div class="donut-wrap">
+            <canvas id="comfort-donut" width="160" height="160"></canvas>
+            <div class="donut-center">
+              <div class="donut-pct" id="ov-comfort-pct">—%</div>
+              <div class="donut-lbl">Comfort</div>
+            </div>
+          </div>
+          <div class="sn-device" id="ov-device-id">Connecting…</div>
+          <div class="sn-conn" id="ov-conn-dot">
+            <span class="conn-dot off"></span><span id="ov-conn-label">Offline</span>
+          </div>
+        </div>
+
+        <!-- Col 3: Current State -->
+        <div class="card current-state-card">
+          <div class="cs-header">
+            <span class="cs-title">Current State</span>
+            <div class="live-badge"><div class="live-dot"></div>Live</div>
+          </div>
+          <div class="state-grid">
+            <div class="state-box sb-green">
+              <div class="sb-val" id="ov-cur-temp">—</div>
+              <div class="sb-lbl">Temperature</div>
+            </div>
+            <div class="state-box sb-blue">
+              <div class="sb-val" id="ov-cur-db">—</div>
+              <div class="sb-lbl">Sound dB</div>
+            </div>
+          </div>
+          <div class="sound-state-row">
+            <span id="ov-sound-icon">🔕</span>
+            <span id="ov-sound-text">Very Low</span>
+          </div>
+          <div class="la-row">
+            <span class="la-label">Live Alerts</span>
+            <span class="la-val" id="ov-alert-val">None</span>
+          </div>
+          <div class="alert-tags" id="ov-alert-tags"></div>
+        </div>
+
+        <!-- Col 1+2: Trend Chart -->
+        <div class="card trend-card">
+          <div class="trend-title">Trend Chart</div>
+          <div class="trend-block">
+            <div class="trend-lbl">Temperature Waves (Last 6h)</div>
+            <div class="chart-mini"><canvas id="temp-chart"></canvas></div>
+          </div>
+          <div class="trend-block" style="margin-top:14px">
+            <div class="trend-lbl">Noise Waves (Last 6h)</div>
+            <div class="chart-mini"><canvas id="noise-chart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- Col 3 bottom: Timeline + Insights -->
+        <div class="ov-right-bot">
+
+          <div class="card timeline-card">
+            <div class="tl-header">Gentle Timeline</div>
+            <div class="timeline-list" id="ov-timeline">
+              <div class="tl-empty">Monitoring started… events will appear here.</div>
+            </div>
+          </div>
+
+          <div class="card insights-card">
+            <div class="ins-title">Smart insights and recommended actions</div>
+            <div class="ins-sub">Insights</div>
+            <div id="ov-insights">
+              <div class="insight-item">Waiting for data…</div>
+            </div>
+          </div>
+
+        </div><!-- /ov-right-bot -->
+
+      </div><!-- /overview-layout -->
+    </div><!-- /page-overview -->
+
+
+    <!-- ══════════ MONITORING ══════════ -->
+    <div class="page-view" id="page-monitoring">
+      <div class="page-header">📊 Live Sensor Data</div>
+      <div class="mon-grid">
+        <div class="card mon-main">
+          <div class="mon-section-title">Environment</div>
+          <table class="mon-table" id="mon-env-table">
+            <tr><td>Temperature</td><td id="mon-temp">—</td></tr>
+            <tr><td>Humidity</td><td id="mon-hum">—</td></tr>
+            <tr><td>Light Level</td><td id="mon-light">—</td></tr>
+            <tr><td>Motion</td><td id="mon-motion">—</td></tr>
+            <tr><td>Motion Count</td><td id="mon-mcount">—</td></tr>
+          </table>
+          <div class="mon-section-title" style="margin-top:16px">Sound Sensor</div>
+          <table class="mon-table">
+            <tr><td>Sound Level</td><td id="mon-slevel">—</td></tr>
+            <tr><td>Sound %</td><td id="mon-spct">—</td></tr>
+            <tr><td>Sound dB (est.)</td><td id="mon-sdb">—</td></tr>
+            <tr><td>Sound Raw (ADC)</td><td id="mon-sraw">—</td></tr>
+            <tr><td>Sound Diff</td><td id="mon-sdiff">—</td></tr>
+            <tr><td>Baseline</td><td id="mon-sbase">—</td></tr>
+            <tr><td>Calibrated</td><td id="mon-scal">—</td></tr>
+            <tr><td>Sensitivity</td><td id="mon-ssens">—</td></tr>
+            <tr><td>Event</td><td id="mon-sevent">—</td></tr>
+            <tr><td>Alert</td><td id="mon-salert">—</td></tr>
+          </table>
+          <div class="mon-section-title" style="margin-top:16px">Device</div>
+          <table class="mon-table">
+            <tr><td>Device ID</td><td id="mon-did">—</td></tr>
+            <tr><td>IP Address</td><td id="mon-ip">—</td></tr>
+            <tr><td>RSSI</td><td id="mon-rssi">—</td></tr>
+            <tr><td>Free Heap</td><td id="mon-heap">—</td></tr>
+            <tr><td>Connection</td><td id="mon-conn">—</td></tr>
+            <tr><td>Last Update</td><td id="mon-last">—</td></tr>
+            <tr><td>Total Readings</td><td id="mon-total">—</td></tr>
+            <tr><td>Comfort Score</td><td id="mon-score">—</td></tr>
+          </table>
+        </div>
+        <div class="mon-side">
+          <div class="card">
+            <div class="mon-section-title">Session Stats</div>
+            <div class="stat-boxes">
+              <div class="stat-box green">
+                <div class="sbox-val" id="mon-avg-sound">0</div>
+                <div class="sbox-lbl">Avg Sound</div>
+              </div>
+              <div class="stat-box yellow">
+                <div class="sbox-val" id="mon-peak-sound">0</div>
+                <div class="sbox-lbl">Peak Sound</div>
+              </div>
+              <div class="stat-box blue">
+                <div class="sbox-val" id="mon-motion-cnt">0</div>
+                <div class="sbox-lbl">Motion Events</div>
+              </div>
+              <div class="stat-box">
+                <div class="sbox-val" id="mon-readings">0</div>
+                <div class="sbox-lbl">Readings</div>
+              </div>
+            </div>
+            <div class="mon-section-title" style="margin-top:16px">Sound Distribution</div>
+            <div class="dist-bars" id="mon-dist">
+              <div class="dist-row"><span class="dist-lbl">Quiet</span><div class="dist-bar-wrap"><div class="dist-bar green" id="db-quiet" style="width:0%"></div></div><span class="dist-pct" id="dp-quiet">0%</span></div>
+              <div class="dist-row"><span class="dist-lbl">Light</span><div class="dist-bar-wrap"><div class="dist-bar teal" id="db-light" style="width:0%"></div></div><span class="dist-pct" id="dp-light">0%</span></div>
+              <div class="dist-row"><span class="dist-lbl">Restless</span><div class="dist-bar-wrap"><div class="dist-bar yellow" id="db-rest" style="width:0%"></div></div><span class="dist-pct" id="dp-rest">0%</span></div>
+              <div class="dist-row"><span class="dist-lbl">Crying</span><div class="dist-bar-wrap"><div class="dist-bar red" id="db-cry" style="width:0%"></div></div><span class="dist-pct" id="dp-cry">0%</span></div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:14px">
+            <div class="mon-section-title">Quick Commands</div>
+            <div class="quick-cmds" id="quick-cmd-area">
+              <div class="qcmd-msg">No device connected</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /monitoring -->
+
+
+    <!-- ══════════ SLEEP ══════════ -->
+    <div class="page-view" id="page-sleep">
+      <div class="page-header">💤 Sleep Analysis</div>
+      <div class="ph-card card">
+        <div class="ph-icon">🌙</div>
+        <div class="ph-title">Sleep Pattern Tracking</div>
+        <div class="ph-sub">Detailed sleep quality metrics and patterns will appear here once enough overnight data is collected.</div>
+        <div class="ph-stats">
+          <div class="ph-stat green">
+            <div id="sl-comfort">—</div>
+            <small>Current Comfort</small>
+          </div>
+          <div class="ph-stat blue">
+            <div id="sl-quiet-pct">—</div>
+            <small>Quiet Time %</small>
+          </div>
+          <div class="ph-stat">
+            <div id="sl-motion">—</div>
+            <small>Motion Events</small>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ══════════ ALERTS ══════════ -->
+    <div class="page-view" id="page-alerts">
+      <div class="page-header">🔔 Alert History</div>
+      <div class="alerts-controls">
+        <div class="alert-filter-tabs">
+          <button class="filter-tab active" data-filter="all">All</button>
+          <button class="filter-tab" data-filter="CRYING">😭 Crying</button>
+          <button class="filter-tab" data-filter="RESTLESS">😟 Restless</button>
+          <button class="filter-tab" data-filter="LIGHT_ACTIVITY">🌙 Light</button>
+        </div>
+        <button class="btn-clear" onclick="clearAlertLog()">Clear Log</button>
+      </div>
+      <div class="alerts-container" id="alerts-list">
+        <div class="al-empty">No alerts recorded yet. Monitoring is active.</div>
+      </div>
+    </div>
+
+
+    <!-- ══════════ HISTORY ══════════ -->
+    <div class="page-view" id="page-history">
+      <div class="page-header">📋 Data History</div>
+      <div class="history-controls">
+        <span class="hist-info" id="hist-info">Showing last <b id="hist-count">0</b> readings</span>
+        <button class="btn-clear" onclick="clearLocalHistory()">Clear Local</button>
+      </div>
+      <div class="card">
+        <div class="hist-table-wrap">
+          <table class="hist-table" id="hist-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Temp °C</th>
+                <th>Humidity %</th>
+                <th>Sound</th>
+                <th>Sound %</th>
+                <th>Event</th>
+                <th>Motion</th>
+                <th>Light</th>
+                <th>Comfort</th>
+              </tr>
+            </thead>
+            <tbody id="hist-body">
+              <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-muted)">No data yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ══════════ BABY SITTER VIEW ══════════ -->
+    <div class="page-view" id="page-babysitter">
+      <div class="page-header">👁️ Baby Sitter View</div>
+      <div class="babysitter-layout">
+        <div class="card bs-status-card" id="bs-status-card">
+          <div class="bs-emoji" id="bs-emoji">😴</div>
+          <div class="bs-status-msg" id="bs-msg">Baby is Deeply Resting</div>
+          <div class="bs-score">
+            <span class="bs-score-num" id="bs-score">—%</span>
+            <span class="bs-score-lbl">Comfort Score</span>
+          </div>
+        </div>
+        <div class="bs-metrics">
+          <div class="card bs-metric">
+            <div class="bsm-icon">🌡</div>
+            <div class="bsm-val" id="bs-temp">—</div>
+            <div class="bsm-lbl">Temperature</div>
+          </div>
+          <div class="card bs-metric">
+            <div class="bsm-icon">🔊</div>
+            <div class="bsm-val" id="bs-sound">—</div>
+            <div class="bsm-lbl">Sound</div>
+          </div>
+          <div class="card bs-metric">
+            <div class="bsm-icon">🚶</div>
+            <div class="bsm-val" id="bs-motion">—</div>
+            <div class="bsm-lbl">Motion</div>
+          </div>
+          <div class="card bs-metric">
+            <div class="bsm-icon">💧</div>
+            <div class="bsm-val" id="bs-hum">—</div>
+            <div class="bsm-lbl">Humidity</div>
+          </div>
+        </div>
+        <div class="card bs-alert-card" id="bs-alert-card">
+          <div class="bs-alert-icon">✅</div>
+          <div class="bs-alert-msg" id="bs-alert-msg">All conditions are optimal. Baby is resting comfortably.</div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ══════════ SETTINGS ══════════ -->
+    <div class="page-view" id="page-settings">
+      <div class="page-header">⚙️ Settings</div>
+      <div class="settings-grid">
+        <div class="card">
+          <div class="set-title">Sound Thresholds (ESP32 scale 0–1023)</div>
+          <div class="set-row">
+            <label>🟢 Quiet (&lt;)</label>
+            <input type="number" class="set-input" id="set-thr-quiet" value="6" min="0" max="1023">
+          </div>
+          <div class="set-row">
+            <label>🟡 Light Activity (&lt;)</label>
+            <input type="number" class="set-input" id="set-thr-light" value="20" min="0" max="1023">
+          </div>
+          <div class="set-row">
+            <label>🟠 Restless (&lt;)</label>
+            <input type="number" class="set-input" id="set-thr-restless" value="40" min="0" max="1023">
+          </div>
+          <button class="set-btn" onclick="applyThresholds()">Apply Thresholds</button>
+        </div>
+        <div class="card">
+          <div class="set-title">Sensor Sensitivity</div>
+          <div class="set-row">
+            <label>Sensitivity (1–20)</label>
+            <div class="slider-row">
+              <input type="range" id="set-sens-slider" min="1" max="20" value="5"
+                oninput="document.getElementById('set-sens-val').textContent=this.value">
+              <span class="slider-val" id="set-sens-val">5</span>
+            </div>
+          </div>
+          <div class="set-btn-row">
+            <button class="set-btn" onclick="sendSensitivity()">Send Sensitivity</button>
+            <button class="set-btn outline" onclick="calibrateDevice()">Calibrate Sensor</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="set-title">Comfort Scoring Weights</div>
+          <div class="set-row"><label>Temperature weight</label><span class="set-val">35%</span></div>
+          <div class="set-row"><label>Humidity weight</label><span class="set-val">25%</span></div>
+          <div class="set-row"><label>Sound weight</label><span class="set-val">40%</span></div>
+          <div class="set-row"><label>Ideal Temperature</label><span class="set-val">20 °C</span></div>
+          <div class="set-row"><label>Ideal Humidity</label><span class="set-val">50 %</span></div>
+        </div>
+        <div class="card">
+          <div class="set-title">Device Commands</div>
+          <div class="set-btn-row" style="flex-direction:column">
+            <button class="set-btn" onclick="sendDeviceCmd('status')">Request Status</button>
+            <button class="set-btn outline" onclick="sendDeviceCmd('recalibrate_sound')">Recalibrate Sound</button>
+            <button class="set-btn outline" onclick="sendDeviceCmd('reset_motion')">Reset Motion Count</button>
+            <button class="set-btn danger" onclick="confirmRestart()">Restart Device</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /page-content -->
+</main>
+
+<!-- Toast notification -->
+<div id="toast" class="toast"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

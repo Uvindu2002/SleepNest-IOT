@@ -1,9 +1,16 @@
-const express = require('express');
-const http = require('http');
+require('dotenv').config();               // load .env before anything else
+
+const express   = require('express');
+const http      = require('http');
 const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
-const path = require('path');
-const fs = require('fs');
+const path      = require('path');
+const fs        = require('fs');
+
+// ── MongoDB ─────────────────────────────────────────────────────
+const { connectMongo, getDb } = require('./db/mongo');
+const { dataBuffer }          = require('./db/DataBuffer');
+const { startAggregator }     = require('./db/Aggregator');
 
 const app = express();
 const server = http.createServer(app);
@@ -423,6 +430,18 @@ app.get('/api/devices/:deviceId/sound/analysis', (req, res) => {
   });
 });
 
+// Generic command endpoint (used by frontend Settings page)
+app.post('/api/devices/:deviceId/command', (req, res) => {
+  const { deviceId } = req.params;
+  const { command, value } = req.body;
+  const device = devices.get(deviceId);
+  if (!device || !device.ws || device.ws.readyState !== WebSocket.OPEN) {
+    return res.status(404).json({ error: 'Device not connected' });
+  }
+  device.ws.send(JSON.stringify({ type: 'command', command, value, timestamp: Date.now() }));
+  res.json({ success: true, command, deviceId });
+});
+
 // Sound calibration endpoint
 app.post('/api/devices/:deviceId/calibrate', async (req, res) => {
   const { deviceId } = req.params;
@@ -684,7 +703,13 @@ wss.on('connection', (ws, req) => {
             });
           }
           
-          // Store in history
+          // ── Push to MongoDB batch buffer (non-blocking) ────────
+          dataBuffer.push(currentDeviceId, {
+            ...device.data,
+            comfort: device.data.comfort ?? null, // comfort computed in frontend; keep null if not available
+          });
+
+          // Store in memory history (for real-time API / charts)
           const history = deviceHistory.get(currentDeviceId);
           const historyEntry = {
             ...device.data,
@@ -853,8 +878,217 @@ setInterval(() => {
   console.log('='.repeat(50));
 }, 3600000);
 
+// ─────────────────────────────────────────────────────────────────
+// ── Database API endpoints ────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/db/readings?deviceId=X&limit=200&from=ISO&to=ISO
+ * Returns batched reading docs from MongoDB (newest first).
+ * Each doc covers ~30 s of data.
+ */
+app.get('/api/db/readings', async (req, res) => {
+  try {
+    const db       = getDb();
+    const deviceId = req.query.deviceId;
+    const limit    = Math.min(parseInt(req.query.limit  || '200', 10), 2000);
+    const from     = req.query.from ? new Date(req.query.from) : null;
+    const to       = req.query.to   ? new Date(req.query.to)   : null;
+
+    const filter = {};
+    if (deviceId) filter.deviceId = deviceId;
+    if (from || to) {
+      filter.ts = {};
+      if (from) filter.ts.$gte = from;
+      if (to)   filter.ts.$lte = to;
+    }
+
+    const docs = await db.collection('readings')
+      .find(filter, { projection: { _id: 0 } })
+      .sort({ ts: -1 })
+      .limit(limit)
+      .toArray();
+
+    res.json({ count: docs.length, readings: docs });
+  } catch (err) {
+    console.error('/api/db/readings error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/db/events?deviceId=X&category=sound|motion&limit=100&from=ISO&to=ISO
+ * Returns state-change events (motion start/end, sound alerts) from MongoDB.
+ */
+app.get('/api/db/events', async (req, res) => {
+  try {
+    const db       = getDb();
+    const deviceId = req.query.deviceId;
+    const category = req.query.category; // 'sound' | 'motion' | undefined
+    const limit    = Math.min(parseInt(req.query.limit || '100', 10), 1000);
+    const from     = req.query.from ? new Date(req.query.from) : null;
+    const to       = req.query.to   ? new Date(req.query.to)   : null;
+
+    const filter = {};
+    if (deviceId) filter.deviceId = deviceId;
+    if (category) filter.category = category;
+    if (from || to) {
+      filter.ts = {};
+      if (from) filter.ts.$gte = from;
+      if (to)   filter.ts.$lte = to;
+    }
+
+    const events = await db.collection('events')
+      .find(filter, { projection: { _id: 0 } })
+      .sort({ ts: -1 })
+      .limit(limit)
+      .toArray();
+
+    res.json({ count: events.length, events });
+  } catch (err) {
+    console.error('/api/db/events error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/db/stats/hourly?deviceId=X&days=7
+ * Returns hourly aggregated stats for trend charts (up to `days` days back).
+ * Sorted oldest-first so charts can render left-to-right.
+ */
+app.get('/api/db/stats/hourly', async (req, res) => {
+  try {
+    const db       = getDb();
+    const deviceId = req.query.deviceId;
+    const days     = Math.min(parseInt(req.query.days || '7', 10), 90);
+    const from     = new Date(Date.now() - days * 24 * 3600 * 1000);
+
+    // hourly_stats uses 'hour' as the date field, not 'ts'
+    const filter = { hour: { $gte: from } };
+    if (deviceId) filter.deviceId = deviceId;
+
+    const stats = await db.collection('hourly_stats')
+      .find(filter, { projection: { _id: 0 } })
+      .sort({ deviceId: 1, hour: 1 })
+      .toArray();
+
+    res.json({ count: stats.length, stats });
+  } catch (err) {
+    console.error('/api/db/stats/hourly error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/db/stats/daily?deviceId=X&days=30
+ * Returns per-day summaries by aggregating hourly_stats.
+ * Useful for the Sleep page "7-day quality" chart.
+ */
+app.get('/api/db/stats/daily', async (req, res) => {
+  try {
+    const db       = getDb();
+    const deviceId = req.query.deviceId;
+    const days     = Math.min(parseInt(req.query.days || '30', 10), 365);
+    const from     = new Date(Date.now() - days * 24 * 3600 * 1000);
+
+    const matchStage = { $match: { hour: { $gte: from } } };
+    if (deviceId) matchStage.$match.deviceId = deviceId;
+
+    const pipeline = [
+      matchStage,
+      {
+        $group: {
+          _id: {
+            deviceId: '$deviceId',
+            date: { $dateToString: { format: '%Y-%m-%d', date: '$hour' } },
+          },
+          tempAvg:   { $avg: '$temp.avg'     },
+          tempMin:   { $min: '$temp.min'     },
+          tempMax:   { $max: '$temp.max'     },
+          humAvg:    { $avg: '$humidity.avg' },
+          sndAvg:    { $avg: '$sound.avg'    },
+          sndMax:    { $max: '$sound.max'    },
+          cftAvg:    { $avg: '$comfort.avg'  },
+          mtnTotal:  { $sum: '$motion.totalSamplesActive' },
+          mtnEvents: { $sum: '$motion.totalEvents'         },
+          hQUIET:          { $sum: '$soundHist.QUIET'          },
+          hLIGHT_ACTIVITY: { $sum: '$soundHist.LIGHT_ACTIVITY' },
+          hRESTLESS:       { $sum: '$soundHist.RESTLESS'       },
+          hCRYING:         { $sum: '$soundHist.CRYING'         },
+        },
+      },
+      { $sort: { '_id.deviceId': 1, '_id.date': 1 } },
+      {
+        $project: {
+          _id:      0,
+          deviceId: '$_id.deviceId',
+          date:     '$_id.date',
+          temp:     { avg: { $round: ['$tempAvg', 2] }, min: '$tempMin', max: '$tempMax' },
+          humidity: { avg: { $round: ['$humAvg',  2] } },
+          sound:    { avg: { $round: ['$sndAvg',  1] }, max: '$sndMax'  },
+          comfort:  { avg: { $round: ['$cftAvg',  1] } },
+          motion:   { totalSamples: '$mtnTotal', totalEvents: '$mtnEvents' },
+          soundHist: {
+            QUIET:          '$hQUIET',
+            LIGHT_ACTIVITY: '$hLIGHT_ACTIVITY',
+            RESTLESS:       '$hRESTLESS',
+            CRYING:         '$hCRYING',
+          },
+        },
+      },
+    ];
+
+    const rows = await db.collection('hourly_stats').aggregate(pipeline).toArray();
+    res.json({ count: rows.length, days: rows });
+  } catch (err) {
+    console.error('/api/db/stats/daily error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/db/health
+ * Quick check: MongoDB connection status + collection counts.
+ */
+app.get('/api/db/health', async (req, res) => {
+  try {
+    const db = getDb();
+    const [readings, events, hourly, meta] = await Promise.all([
+      db.collection('readings').estimatedDocumentCount(),
+      db.collection('events').estimatedDocumentCount(),
+      db.collection('hourly_stats').estimatedDocumentCount(),
+      db.collection('devices_meta').estimatedDocumentCount(),
+    ]);
+    res.json({
+      status: 'ok',
+      collections: { readings, events, hourly_stats: hourly, devices_meta: meta },
+    });
+  } catch (err) {
+    res.status(503).json({ status: 'error', message: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// ── Server startup — connect MongoDB first, then listen ───────────
+// ─────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3007;
-server.listen(PORT, '0.0.0.0', () => {
+
+async function startServer() {
+  // 1. Connect to MongoDB (non-fatal: server keeps running if Mongo is down)
+  try {
+    await connectMongo();
+    dataBuffer.start();     // begin 30-second batch flush timer
+    startAggregator();      // hourly stats aggregation job
+  } catch (err) {
+    console.error('[MongoDB] ⚠️  Could not connect — running without DB persistence:', err.message);
+    console.error('[MongoDB]    Set MONGO_URI in .env to enable persistence.');
+  }
+
+  // 2. Start HTTP + WebSocket server
+  server.listen(PORT, '0.0.0.0', startServerCallback);
+}
+
+function startServerCallback() {
   console.log('\n🚀 Enhanced Greenhouse Monitor Server');
   console.log('='.repeat(50));
   console.log(`📡 WebSocket: ws://localhost:${PORT}`);
@@ -886,5 +1120,26 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`   LIGHT_ACTIVITY: ${CONFIG.soundThresholds.QUIET}-${CONFIG.soundThresholds.LIGHT_ACTIVITY} - Soft sounds`);
   console.log(`   RESTLESS: ${CONFIG.soundThresholds.LIGHT_ACTIVITY}-${CONFIG.soundThresholds.RESTLESS} - Moderate activity`);
   console.log(`   CRYING: > ${CONFIG.soundThresholds.RESTLESS} - Loud/urgent sounds`);
+  console.log('\n🗄️  MongoDB API:');
+  console.log(`   GET  /api/db/readings        - Batched 30s reading docs (TTL 7d)`);
+  console.log(`   GET  /api/db/events          - State-change events (permanent)`);
+  console.log(`   GET  /api/db/stats/hourly    - Hourly summaries`);
+  console.log(`   GET  /api/db/stats/daily     - Daily summaries`);
+  console.log(`   GET  /api/db/health          - DB connection health`);
   console.log('='.repeat(50));
+}
+
+// ── Graceful shutdown ────────────────────────────────────────────
+process.on('SIGTERM', async () => {
+  console.log('[Server] SIGTERM — draining buffer and shutting down…');
+  await dataBuffer.drain();
+  process.exit(0);
 });
+process.on('SIGINT', async () => {
+  console.log('[Server] SIGINT — draining buffer and shutting down…');
+  await dataBuffer.drain();
+  process.exit(0);
+});
+
+// ── Boot ─────────────────────────────────────────────────────────
+startServer();
