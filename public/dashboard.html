@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Baby Monitor — Advanced Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<style>
+/* ── Reset & base ───────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0f1a;--surface:#161928;--surface2:#1e2236;--surface3:#252840;
+  --border:#2a2e4a;--text:#e2e8f0;--muted:#64748b;--accent:#7c3aed;
+  --green:#10b981;--yellow:#f59e0b;--red:#ef4444;--blue:#3b82f6;
+}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+a{color:var(--accent);text-decoration:none}
+button{cursor:pointer;font-family:inherit}
+input,select{font-family:inherit}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ── Header ────────────────────────────────────────────── */
+header{
+  position:sticky;top:0;z-index:100;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:0 24px;height:56px;
+  display:flex;align-items:center;gap:16px;
+}
+header .logo{font-size:1.1rem;font-weight:700;color:var(--accent);white-space:nowrap}
+header .logo span{color:var(--text)}
+#device-tabs{display:flex;gap:4px;overflow-x:auto;flex:1}
+.tab{
+  padding:6px 16px;border-radius:8px;border:1px solid transparent;
+  font-size:.82rem;font-weight:600;background:transparent;color:var(--muted);
+  white-space:nowrap;transition:.2s;
+}
+.tab:hover{background:var(--surface3)}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tab .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;background:var(--red)}
+.tab .dot.on{background:var(--green)}
+#ws-pill{
+  display:flex;align-items:center;gap:6px;padding:5px 12px;
+  border-radius:20px;font-size:.78rem;font-weight:600;white-space:nowrap;
+  background:var(--surface3);border:1px solid var(--border);
+}
+#ws-dot{width:8px;height:8px;border-radius:50%;background:var(--red);transition:.3s}
+#ws-dot.on{background:var(--green);box-shadow:0 0 6px var(--green)}
+
+/* ── Page wrapper ───────────────────────────────────────── */
+.page{max-width:1600px;margin:0 auto;padding:20px 16px;display:none}
+.page.active{display:block}
+#no-devices{text-align:center;padding:100px 0;color:var(--muted)}
+#no-devices .icon{font-size:4rem;margin-bottom:16px}
+
+/* ── Grid ───────────────────────────────────────────────── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+@media(max-width:1000px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr 1fr}}
+@media(max-width:640px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}}
+
+/* ── Cards ──────────────────────────────────────────────── */
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  overflow:hidden;
+}
+.card-title{
+  padding:12px 16px;background:var(--surface2);border-bottom:1px solid var(--border);
+  font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted);display:flex;align-items:center;gap:8px;
+}
+.card-title .icon{font-size:1rem}
+.card-body{padding:16px}
+
+/* ── Status strip ────────────────────────────────────────── */
+.status-strip{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;
+  margin-bottom:16px;
+}
+.stat{
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  padding:14px 16px;
+}
+.stat .label{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.stat .value{font-size:1.5rem;font-weight:700;color:var(--text)}
+.stat .sub{font-size:.72rem;color:var(--muted);margin-top:2px}
+.stat.accent .value{color:var(--accent)}
+.stat.green  .value{color:var(--green)}
+.stat.yellow .value{color:var(--yellow)}
+.stat.red    .value{color:var(--red)}
+
+/* ── Sound event badge ───────────────────────────────────── */
+.event{
+  display:inline-block;padding:4px 12px;border-radius:20px;
+  font-size:.78rem;font-weight:700;letter-spacing:.04em;
+}
+.event-QUIET          {background:#064e3b33;color:var(--green);border:1px solid #064e3b}
+.event-LIGHT_ACTIVITY {background:#14532d33;color:#86efac;border:1px solid #14532d}
+.event-RESTLESS       {background:#78350f33;color:var(--yellow);border:1px solid #78350f}
+.event-CRYING         {background:#7f1d1d33;color:var(--red);border:1px solid #7f1d1d;animation:pulse .7s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── Sound bar ───────────────────────────────────────────── */
+.sbar-wrap{background:var(--bg);border-radius:6px;height:12px;overflow:hidden;margin:8px 0}
+.sbar{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--green),var(--yellow),var(--red));transition:width .4s ease}
+
+/* ── Motion dot ──────────────────────────────────────────── */
+.mdot{display:inline-block;width:11px;height:11px;border-radius:50%;background:var(--surface3);transition:.3s;vertical-align:middle;margin-right:4px}
+.mdot.active{background:var(--yellow);box-shadow:0 0 8px var(--yellow)}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btn{
+  padding:8px 14px;border-radius:8px;border:none;
+  font-size:.8rem;font-weight:600;transition:.2s;
+}
+.btn:hover{filter:brightness(1.15)}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-green  {background:#065f46;color:var(--green)}
+.btn-yellow {background:#78350f;color:var(--yellow)}
+.btn-red    {background:#7f1d1d;color:var(--red)}
+.btn-ghost  {background:var(--surface3);color:var(--text);border:1px solid var(--border)}
+.btn-sm     {padding:5px 10px;font-size:.75rem}
+.btn-full   {width:100%}
+.btn-group  {display:flex;gap:8px;flex-wrap:wrap}
+
+/* ── Range slider ────────────────────────────────────────── */
+.slider-wrap{display:flex;align-items:center;gap:10px}
+input[type=range]{
+  flex:1;-webkit-appearance:none;appearance:none;height:5px;
+  background:var(--surface3);border-radius:3px;outline:none;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--accent);cursor:pointer;
+}
+.range-val{
+  min-width:28px;text-align:center;font-size:.85rem;font-weight:700;color:var(--accent);
+}
+
+/* ── Form rows ───────────────────────────────────────────── */
+.form-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.form-row label{font-size:.8rem;color:var(--muted);min-width:140px}
+.form-row input[type=number],
+.form-row input[type=text],
+.form-row select{
+  background:var(--bg);border:1px solid var(--border);color:var(--text);
+  border-radius:8px;padding:7px 10px;font-size:.82rem;flex:1;min-width:80px;
+}
+.form-row input:focus,
+.form-row select:focus{outline:none;border-color:var(--accent)}
+
+/* ── Terminal / console ──────────────────────────────────── */
+.console-out{
+  background:var(--bg);border:1px solid var(--border);border-radius:10px;
+  padding:12px;font-family:'Courier New',monospace;font-size:.78rem;
+  height:200px;overflow-y:auto;line-height:1.6;
+}
+.console-out .line{padding:1px 0}
+.console-out .line.ok{color:var(--green)}
+.console-out .line.err{color:var(--red)}
+.console-out .line.warn{color:var(--yellow)}
+.console-out .line.info{color:#93c5fd}
+
+.cmd-row{display:flex;gap:8px;margin-top:8px}
+.cmd-row input{
+  flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);
+  border-radius:8px;padding:8px 12px;font-family:'Courier New',monospace;font-size:.82rem;
+}
+.cmd-row input:focus{outline:none;border-color:var(--accent)}
+
+/* ── Chart ───────────────────────────────────────────────── */
+.chart-wrap{position:relative;height:180px}
+
+/* ── Alert log ───────────────────────────────────────────── */
+.alert-list{max-height:180px;overflow-y:auto}
+.alert-item{
+  display:flex;align-items:flex-start;gap:8px;
+  padding:7px 10px;border-radius:8px;margin-bottom:5px;
+  font-size:.78rem;background:var(--surface2);border:1px solid var(--border);
+}
+.alert-item .ai-event{
+  font-weight:700;white-space:nowrap;min-width:100px;
+}
+.alert-item .ai-time{color:var(--muted);white-space:nowrap;margin-left:auto;font-size:.72rem}
+.alert-CRYING .ai-event{color:var(--red)}
+.alert-RESTLESS .ai-event{color:var(--yellow)}
+.alert-LIGHT_ACTIVITY .ai-event{color:var(--green)}
+
+/* ── Threshold editor ────────────────────────────────────── */
+.threshold-row{
+  display:flex;align-items:center;gap:12px;
+  padding:8px 0;border-bottom:1px solid var(--border);
+}
+.threshold-row:last-child{border:none}
+.thr-label{min-width:130px;font-size:.82rem;color:var(--muted)}
+.thr-input{
+  width:80px;background:var(--bg);border:1px solid var(--border);color:var(--text);
+  border-radius:8px;padding:6px 10px;font-size:.85rem;text-align:center;
+}
+.thr-input:focus{outline:none;border-color:var(--accent)}
+.thr-bar{flex:1;height:6px;border-radius:3px}
+
+/* ── Metrics table ───────────────────────────────────────── */
+.metrics-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.metrics-table td{padding:7px 10px;border-bottom:1px solid var(--border)}
+.metrics-table td:first-child{color:var(--muted)}
+.metrics-table td:last-child{text-align:right;font-weight:600;color:var(--text)}
+.metrics-table tr:last-child td{border:none}
+
+/* ── Toast ───────────────────────────────────────────────── */
+#toast{
+  position:fixed;bottom:24px;right:24px;z-index:999;
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:10px;padding:12px 18px;font-size:.82rem;
+  max-width:320px;opacity:0;transform:translateY(10px);
+  transition:.3s;pointer-events:none;
+}
+#toast.show{opacity:1;transform:translateY(0)}
+#toast.ok{border-color:var(--green);color:var(--green)}
+#toast.err{border-color:var(--red);color:var(--red)}
+#toast.warn{border-color:var(--yellow);color:var(--yellow)}
+
+/* ── Section separator ───────────────────────────────────── */
+.section-gap{margin-top:16px}
+</style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────── -->
+<header>
+  <div class="logo">&#x1F476; Baby<span>Monitor</span></div>
+  <div id="device-tabs"></div>
+  <div id="ws-pill">
+    <div id="ws-dot"></div>
+    <span id="ws-label">Connecting…</span>
+  </div>
+</header>
+
+<!-- ── No-devices placeholder ──────────────────────────── -->
+<div id="no-devices" class="page active">
+  <div class="icon">&#x1F4F6;</div>
+  <p>Waiting for ESP32 devices to connect…</p>
+</div>
+
+<!-- ── Per-device pages injected by JS ─────────────────── -->
+
+<!-- ── Toast ───────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════════════════ */
+const state   = {};   // deviceId -> device snapshot
+const charts  = {};   // deviceId -> Chart instance
+const logs    = {};   // deviceId -> [{timestamp,event,level}]
+const history = {};   // deviceId -> [{pct, ts}]   for chart
+const MAX_HIST = 60;
+
+/* ══════════════════════════════════════════════════════════
+   WEBSOCKET
+══════════════════════════════════════════════════════════ */
+let ws;
+function connect() {
+  ws = new WebSocket(`ws://${location.host}`);
+  ws.onopen  = () => setWs(true);
+  ws.onclose = () => { setWs(false); setTimeout(connect, 3000); };
+  ws.onerror = () => ws.close();
+}
+function setWs(ok) {
+  document.getElementById('ws-dot').className = ok ? 'on' : '';
+  document.getElementById('ws-label').textContent = ok ? 'Connected' : 'Disconnected';
+}
+
+/* ══════════════════════════════════════════════════════════
+   POLLING
+══════════════════════════════════════════════════════════ */
+async function poll() {
+  try {
+    const res = await fetch('/api/devices');
+    if (!res.ok) return;
+    const devices = await res.json();
+    devices.forEach(d => ingest(d));
+    refreshTabs();
+  } catch(_) {}
+}
+
+function ingest(d) {
+  const id = d.deviceId;
+  const prev = state[id];
+  state[id] = d;
+
+  // history for chart
+  if (!history[id]) history[id] = [];
+  const pct = d.latestData?.sound_percentage ?? Math.round(((d.latestData?.sound_level??0)/1023)*100);
+  history[id].push({ pct, ts: Date.now() });
+  if (history[id].length > MAX_HIST) history[id].shift();
+
+  // alert log
+  if (!logs[id]) logs[id] = [];
+  const ev = d.latestData?.sound_event;
+  if (ev && ev !== 'QUIET') {
+    const last = logs[id][0];
+    if (!last || Date.now() - last.ts > 4000 || last.event !== ev) {
+      logs[id].unshift({ ts: Date.now(), event: ev, level: d.latestData?.sound_level??0, alert: d.latestData?.sound_alert??'' });
+      if (logs[id].length > 50) logs[id].pop();
+    }
+  }
+
+  // create page if new device
+  if (!document.getElementById(`page-${id}`)) {
+    buildPage(id);
+  }
+
+  updatePage(id);
+  updateChart(id);
+}
+
+/* ══════════════════════════════════════════════════════════
+   TABS
+══════════════════════════════════════════════════════════ */
+let activeId = null;
+function refreshTabs() {
+  const tabBar = document.getElementById('device-tabs');
+  Object.keys(state).forEach(id => {
+    let tab = document.getElementById(`tab-${id}`);
+    if (!tab) {
+      tab = document.createElement('button');
+      tab.className = 'tab';
+      tab.id = `tab-${id}`;
+      tab.onclick = () => switchTab(id);
+      tabBar.appendChild(tab);
+    }
+    const online = state[id].connected;
+    tab.innerHTML = `<span class="dot ${online?'on':''}"></span>${id}`;
+    tab.className = 'tab' + (id === activeId ? ' active' : '');
+  });
+  if (!activeId && Object.keys(state).length > 0) {
+    switchTab(Object.keys(state)[0]);
+  }
+}
+
+function switchTab(id) {
+  activeId = id;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const p = document.getElementById(`page-${id}`);
+  if (p) p.classList.add('active');
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const t = document.getElementById(`tab-${id}`);
+  if (t) t.classList.add('active');
+  document.getElementById('no-devices').classList.remove('active');
+}
+
+/* ══════════════════════════════════════════════════════════
+   BUILD PAGE (once per device)
+══════════════════════════════════════════════════════════ */
+function buildPage(id) {
+  const el = document.createElement('div');
+  el.className = 'page';
+  el.id = `page-${id}`;
+  el.innerHTML = `
+
+<!-- ── Stat strip ── -->
+<div class="status-strip" id="strip-${id}"></div>
+
+<!-- ── Row 1: Sound + Chart ── -->
+<div class="grid-2">
+
+  <!-- Sound Panel -->
+  <div class="card">
+    <div class="card-title"><span class="icon">&#x1F50A;</span>Sound Monitor</div>
+    <div class="card-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span id="ev-badge-${id}" class="event event-QUIET">QUIET</span>
+        <span id="ev-pct-${id}" style="font-size:1.8rem;font-weight:700;color:var(--accent)">0%</span>
+      </div>
+      <div class="sbar-wrap"><div id="sbar-${id}" class="sbar" style="width:0%"></div></div>
+      <div style="display:flex;gap:16px;margin-top:10px;font-size:.78rem;color:var(--muted)">
+        <span>Level: <b id="slevel-${id}" style="color:var(--text)">0</b></span>
+        <span>Raw: <b id="sraw-${id}" style="color:var(--text)">—</b></span>
+        <span>Diff: <b id="sdiff-${id}" style="color:var(--text)">—</b></span>
+        <span>Base: <b id="sbase-${id}" style="color:var(--text)">—</b></span>
+      </div>
+      <div style="display:flex;gap:16px;margin-top:6px;font-size:.78rem;color:var(--muted)">
+        <span>Trend: <b id="strend-${id}" style="color:var(--text)">—</b></span>
+        <span>Stability: <b id="sstab-${id}" style="color:var(--text)">—</b></span>
+        <span>Energy: <b id="senergy-${id}" style="color:var(--text)">—</b></span>
+        <span id="scal-${id}" style="color:var(--yellow)">⚠️ Not calibrated</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div class="card">
+    <div class="card-title"><span class="icon">&#x1F4C8;</span>Sound History (last ${MAX_HIST} samples)</div>
+    <div class="card-body">
+      <div class="chart-wrap"><canvas id="chart-${id}"></canvas></div>
+    </div>
+  </div>
+
+</div><!-- grid-2 -->
+
+<!-- ── Row 2: Environment + Device Info ── -->
+<div class="grid-2 section-gap">
+
+  <div class="card">
+    <div class="card-title"><span class="icon">&#x1F321;</span>Environment</div>
+    <div class="card-body">
+      <table class="metrics-table">
+        <tr><td>&#x1F321; Temperature</td><td id="temp-${id}">—</td></tr>
+        <tr><td>&#x1F4A7; Humidity</td><td id="hum-${id}">—</td></tr>
+        <tr><td>&#x1F4A1; Light</td><td id="light-${id}">—</td></tr>
+        <tr><td>&#x1F6B6; Motion</td><td id="motion-${id}">—</td></tr>
+        <tr><td>&#x1F504; Motion Count</td><td id="mcount-${id}">—</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="icon">&#x1F4F1;</span>Device Info</div>
+    <div class="card-body">
+      <table class="metrics-table">
+        <tr><td>Device ID</td><td id="did-${id}">${id}</td></tr>
+        <tr><td>IP Address</td><td id="dip-${id}">—</td></tr>
+        <tr><td>RSSI</td><td id="drssi-${id}">—</td></tr>
+        <tr><td>Free Heap</td><td id="dheap-${id}">—</td></tr>
+        <tr><td>Status</td><td id="dstat-${id}">—</td></tr>
+        <tr><td>Last Seen</td><td id="dlast-${id}">—</td></tr>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Row 3: Sensitivity Tuning + Thresholds ── -->
+<div class="grid-2 section-gap">
+
+  <!-- Sensitivity -->
+  <div class="card">
+    <div class="card-title"><span class="icon">&#x1F39A;</span>Sensitivity Tuning</div>
+    <div class="card-body">
+      <div class="form-row">
+        <label>Sensitivity (1–20)</label>
+        <div class="slider-wrap" style="flex:1">
+          <input type="range" id="sens-slider-${id}" min="1" max="20" value="5"
+            oninput="document.getElementById('sens-val-${id}').textContent=this.value">
+          <span class="range-val" id="sens-val-${id}">5</span>
+        </div>
+      </div>
+      <div class="btn-group" style="margin-top:8px">
+        <button class="btn btn-primary btn-sm" onclick="setSensitivity('${id}')">&#x1F4E4; Send Sensitivity</button>
+        <button class="btn btn-green btn-sm"   onclick="calibrate('${id}')">&#x1F527; Calibrate</button>
+        <button class="btn btn-ghost btn-sm"   onclick="autoTune('${id}')">&#x2696; Auto-Tune</button>
+      </div>
+      <div style="margin-top:14px">
+        <div class="form-row">
+          <label>Target sensitivity</label>
+          <input type="number" id="autotune-target-${id}" value="5" min="1" max="20" style="width:70px;flex:none">
+        </div>
+        <button class="btn btn-yellow btn-sm btn-full" onclick="autoTuneTarget('${id}')">&#x1F3AF; Auto-Tune with Target</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Thresholds -->
+  <div class="card">
+    <div class="card-title"><span class="icon">&#x1F4CF;</span>Sound Thresholds (ESP32 scale 0–1023)</div>
+    <div class="card-body">
+      <div class="threshold-row">
+        <span class="thr-label" style="color:var(--green)">&#x1F7E2; Quiet (&lt;)</span>
+        <input type="number" class="thr-input" id="thr-quiet-${id}" value="6" min="0" max="1023">
+        <div class="thr-bar" style="background:var(--green);opacity:.3"></div>
+      </div>
+      <div class="threshold-row">
+        <span class="thr-label" style="color:#86efac">&#x1F7E1; Light Activity (&lt;)</span>
+        <input type="number" class="thr-input" id="thr-light-${id}" value="20" min="0" max="1023">
+        <div class="thr-bar" style="background:#86efac;opacity:.3"></div>
+      </div>
+      <div class="threshold-row">
+        <span class="thr-label" style="color:var(--yellow)">&#x1F7E1; Restless (&lt;)</span>
+        <input type="number" class="thr-input" id="thr-restless-${id}" value="40" min="0" max="1023">
+        <div class="thr-bar" style="background:var(--yellow);opacity:.3"></div>
+      </div>
+      <div class="threshold-row">
+        <span class="thr-label" style="color:var(--red)">&#x1F534; Crying (≥)</span>
+        <input type="number" class="thr-input" id="thr-cry-${id}" value="60" min="0" max="1023" disabled style="opacity:.5">
+        <div class="thr-bar" style="background:var(--red);opacity:.3"></div>
+      </div>
+      <button class="btn btn-primary btn-full" style="margin-top:12px" onclick="sendThresholds('${id}')">
+        &#x1F4E4; Apply Thresholds to Device
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Row 4: Command Console + Alert Log ── -->
+<div class="grid-2 section-gap">
+
+  <!-- Command Console -->
+  <div class="card">
+    <div class="card-title"><span class="icon">&#x1F5A5;</span>Command Console</div>
+    <div class="card-body">
+
+      <!-- Quick commands -->
+      <div style="margin-bottom:12px">
+        <div style="font-size:.75rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Quick Commands</div>
+        <div class="btn-group">
+          <button class="btn btn-green btn-sm"  onclick="sendCmd('${id}','recalibrate_sound')">Recalibrate</button>
+          <button class="btn btn-ghost btn-sm"  onclick="sendCmd('${id}','reset_stats')">Reset Stats</button>
+          <button class="btn btn-yellow btn-sm" onclick="sendCmd('${id}','enable_debug')">Debug ON</button>
+          <button class="btn btn-ghost btn-sm"  onclick="sendCmd('${id}','disable_debug')">Debug OFF</button>
+          <button class="btn btn-red btn-sm"    onclick="sendCmd('${id}','restart')">Restart</button>
+        </div>
+      </div>
+
+      <!-- Custom command builder -->
+      <div style="margin-bottom:10px">
+        <div style="font-size:.75rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Custom Command</div>
+        <div class="form-row">
+          <label>Command</label>
+          <input type="text" id="custom-cmd-${id}" placeholder="e.g. set_sensitivity" list="cmd-list-${id}">
+          <datalist id="cmd-list-${id}">
+            <option value="set_sensitivity">
+            <option value="recalibrate_sound">
+            <option value="reset_stats">
+            <option value="enable_debug">
+            <option value="disable_debug">
+            <option value="restart">
+            <option value="get_status">
+          </datalist>
+        </div>
+        <div class="form-row">
+          <label>Value (optional)</label>
+          <input type="text" id="custom-val-${id}" placeholder="e.g. 7">
+        </div>
+        <button class="btn btn-primary btn-sm btn-full" onclick="sendCustomCmd('${id}')">&#x1F4E4; Send Command</button>
+      </div>
+
+      <!-- Raw JSON sender -->
+      <div>
+        <div style="font-size:.75rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Raw JSON</div>
+        <textarea id="raw-json-${id}"
+          style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px;font-family:'Courier New',monospace;font-size:.75rem;height:64px;resize:vertical"
+          placeholder='{"type":"command","command":"set_sensitivity","value":5}'></textarea>
+        <button class="btn btn-ghost btn-sm btn-full" style="margin-top:6px" onclick="sendRawJson('${id}')">Send Raw JSON via API</button>
+      </div>
+
+      <!-- Console output -->
+      <div style="margin-top:12px;font-size:.75rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Response Log</div>
+      <div class="console-out" id="console-${id}">
+        <div class="line info">» Ready. Select a command or type raw JSON.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alert Log -->
+  <div class="card">
+    <div class="card-title">
+      <span class="icon">&#x1F514;</span>Alert Log
+      <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="clearAlerts('${id}')">Clear</button>
+    </div>
+    <div class="card-body">
+      <div class="alert-list" id="alerts-${id}">
+        <div style="color:var(--muted);font-size:.78rem">No alerts yet.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Row 5: Sound Event Distribution ── -->
+<div class="section-gap">
+  <div class="card">
+    <div class="card-title"><span class="icon">&#x1F4CA;</span>Session Statistics</div>
+    <div class="card-body">
+      <div class="grid-4">
+        <div class="stat green">
+          <div class="label">Quiet</div>
+          <div class="value" id="ev-quiet-${id}">0</div>
+          <div class="sub">readings</div>
+        </div>
+        <div class="stat">
+          <div class="label">Light Activity</div>
+          <div class="value" id="ev-light-${id}" style="color:#86efac">0</div>
+          <div class="sub">readings</div>
+        </div>
+        <div class="stat yellow">
+          <div class="label">Restless</div>
+          <div class="value" id="ev-restless-${id}">0</div>
+          <div class="sub">readings</div>
+        </div>
+        <div class="stat red">
+          <div class="label">Crying</div>
+          <div class="value" id="ev-cry-${id}">0</div>
+          <div class="sub">readings</div>
+        </div>
+      </div>
+      <div class="grid-4" style="margin-top:12px">
+        <div class="stat accent">
+          <div class="label">Total Readings</div>
+          <div class="value" id="st-total-${id}">0</div>
+        </div>
+        <div class="stat">
+          <div class="label">Avg Sound</div>
+          <div class="value" id="st-avg-${id}" style="color:var(--blue)">0</div>
+        </div>
+        <div class="stat">
+          <div class="label">Peak Sound</div>
+          <div class="value" id="st-peak-${id}" style="color:var(--yellow)">0</div>
+        </div>
+        <div class="stat">
+          <div class="label">Motion Events</div>
+          <div class="value" id="st-motion-${id}" style="color:var(--yellow)">0</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+  `; // end innerHTML
+  document.body.appendChild(el);
+  initChart(id);
+}
+
+/* ══════════════════════════════════════════════════════════
+   UPDATE PAGE (every poll)
+══════════════════════════════════════════════════════════ */
+function updatePage(id) {
+  const d    = state[id];
+  const data = d.latestData  || {};
+  const stats= d.stats       || {};
+  const sm   = d.soundMetrics|| {};
+  const info = d.info        || {};
+
+  const pct  = data.sound_percentage ?? Math.round(((data.sound_level??0)/1023)*100);
+  const ev   = data.sound_event || 'QUIET';
+
+  // strip
+  set(`strip-${id}`, `
+    <div class="stat green">
+      <div class="label">Sound</div>
+      <div class="value">${pct}%</div>
+      <div class="sub">${ev.replace('_',' ')}</div>
+    </div>
+    <div class="stat ${data.temperature>30?'red':data.temperature>26?'yellow':'green'}">
+      <div class="label">Temperature</div>
+      <div class="value">${data.temperature!=null?data.temperature.toFixed(1):'—'}<span style="font-size:.9rem">°C</span></div>
+    </div>
+    <div class="stat">
+      <div class="label">Humidity</div>
+      <div class="value" style="color:var(--blue)">${data.humidity!=null?data.humidity.toFixed(1):'—'}<span style="font-size:.9rem">%</span></div>
+    </div>
+    <div class="stat ${data.motion===1?'yellow':''}">
+      <div class="label">Motion</div>
+      <div class="value">${data.motion===1?'YES':'NO'}</div>
+    </div>
+    <div class="stat">
+      <div class="label">RSSI</div>
+      <div class="value" style="color:var(--muted);font-size:1.1rem">${info.rssi??data.rssi??'—'} <span style="font-size:.7rem">dBm</span></div>
+    </div>
+    <div class="stat ${d.connected?'green':'red'}">
+      <div class="label">Status</div>
+      <div class="value" style="font-size:1rem">${d.connected?'Online':'Offline'}</div>
+    </div>
+  `);
+
+  // sound
+  setText(`ev-badge-${id}`, ev.replace('_',' '));
+  setClass(`ev-badge-${id}`, `event event-${ev}`);
+  setText(`ev-pct-${id}`, pct+'%');
+  setStyle(`sbar-${id}`, 'width', pct+'%');
+  setText(`slevel-${id}`, data.sound_level??'0');
+  setText(`sraw-${id}`,   data.sound_raw??'—');
+  setText(`sdiff-${id}`,  data.sound_diff??'—');
+  setText(`sbase-${id}`,  data.sound_baseline??'—');
+  setText(`strend-${id}`, sm.trend ?? data.sound_trend ?? '—');
+  setText(`sstab-${id}`,  sm.stability!=null ? sm.stability.toFixed(1)+'%' : (data.sound_stability!=null?data.sound_stability.toFixed(1)+'%':'—'));
+  setText(`senergy-${id}`,sm.energy??data.sound_energy??'—');
+
+  const cal = sm.calibrated ?? data.sound_calibrated ?? false;
+  setText(`scal-${id}`, cal ? '✅ Calibrated' : '⚠️ Not calibrated');
+  setStyle(`scal-${id}`, 'color', cal ? 'var(--green)' : 'var(--yellow)');
+
+  // environment
+  setText(`temp-${id}`,   data.temperature!=null ? data.temperature.toFixed(1)+' °C' : '—');
+  setText(`hum-${id}`,    data.humidity!=null ? data.humidity.toFixed(1)+' %' : '—');
+  setText(`light-${id}`,  data.light??'—');
+  setText(`motion-${id}`, `<span class="mdot ${data.motion===1?'active':''}"></span>${data.motion===1?'Detected':'None'}`);
+  setHtml(`motion-${id}`, `<span class="mdot ${data.motion===1?'active':''}"></span>${data.motion===1?'Detected':'None'}`);
+  setText(`mcount-${id}`, stats.motionCount??0);
+
+  // device info
+  setText(`dip-${id}`,   info.ip??'—');
+  setText(`drssi-${id}`, (info.rssi??data.rssi??'—')+' dBm');
+  setText(`dheap-${id}`, data.free_heap ? (data.free_heap/1024).toFixed(0)+' KB' : '—');
+  const badge = d.connected ? '<span style="color:var(--green)">&#x25CF; Online</span>' : '<span style="color:var(--red)">&#x25CF; Offline</span>';
+  setHtml(`dstat-${id}`, badge);
+  setText(`dlast-${id}`, d.lastSeen ? new Date(d.lastSeen).toLocaleTimeString() : '—');
+
+  // sync sensitivity slider from device
+  if (info.sensitivity) {
+    const sl = document.getElementById(`sens-slider-${id}`);
+    if (sl && !sl.matches(':active')) {
+      sl.value = info.sensitivity;
+      setText(`sens-val-${id}`, info.sensitivity);
+    }
+  }
+
+  // sync thresholds from device if present
+  if (data.thresholds) {
+    setVal(`thr-quiet-${id}`,   data.thresholds.quiet);
+    setVal(`thr-light-${id}`,   data.thresholds.light_activity);
+    setVal(`thr-restless-${id}`,data.thresholds.restless);
+  }
+
+  // stats
+  const ec = stats.soundEventCount || {};
+  setText(`ev-quiet-${id}`,   ec.QUIET??0);
+  setText(`ev-light-${id}`,   ec.LIGHT_ACTIVITY??0);
+  setText(`ev-restless-${id}`,ec.RESTLESS??0);
+  setText(`ev-cry-${id}`,     ec.CRYING??0);
+  setText(`st-total-${id}`,   stats.totalReadings??0);
+  setText(`st-avg-${id}`,     stats.avgSoundLevel ? stats.avgSoundLevel.toFixed(0) : 0);
+  setText(`st-peak-${id}`,    stats.peakSoundRecorded??0);
+  setText(`st-motion-${id}`,  stats.motionCount??0);
+
+  // alert log
+  renderAlerts(id);
+}
+
+/* ══════════════════════════════════════════════════════════
+   CHART
+══════════════════════════════════════════════════════════ */
+function initChart(id) {
+  const ctx = document.getElementById(`chart-${id}`).getContext('2d');
+  charts[id] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Sound %',
+        data: [],
+        borderColor: '#7c3aed',
+        backgroundColor: 'rgba(124,58,237,.15)',
+        borderWidth: 2,
+        pointRadius: 0,
+        fill: true,
+        tension: .3
+      },{
+        label: 'Peak',
+        data: [],
+        borderColor: '#ef4444',
+        borderWidth: 1,
+        borderDash: [4,3],
+        pointRadius: 0,
+        fill: false,
+        tension: .3
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: false,
+      interaction: { intersect: false, mode:'index' },
+      plugins: {
+        legend: { labels: { color:'#94a3b8', font:{ size:11 }, boxWidth:12 } },
+        tooltip: { backgroundColor:'#1e2236', titleColor:'#e2e8f0', bodyColor:'#94a3b8' }
+      },
+      scales: {
+        x: { display: false },
+        y: {
+          min: 0, max: 100,
+          grid: { color:'#1e2236' },
+          ticks: { color:'#64748b', font:{ size:10 }, callback: v => v+'%' }
+        }
+      }
+    }
+  });
+}
+
+function updateChart(id) {
+  const ch = charts[id];
+  if (!ch) return;
+  const h = history[id] || [];
+  ch.data.labels   = h.map((_,i) => i);
+  ch.data.datasets[0].data = h.map(p => p.pct);
+  // peak line = current peak %
+  const peakPct = Math.round(((state[id]?.latestData?.sound_peak??0)/1023)*100);
+  ch.data.datasets[1].data = h.map(() => peakPct);
+  ch.update('none');
+}
+
+/* ══════════════════════════════════════════════════════════
+   ALERT LOG
+══════════════════════════════════════════════════════════ */
+function renderAlerts(id) {
+  const list = document.getElementById(`alerts-${id}`);
+  if (!list) return;
+  const items = logs[id] || [];
+  if (!items.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:.78rem">No alerts yet.</div>';
+    return;
+  }
+  list.innerHTML = items.map(a => `
+    <div class="alert-item alert-${a.event}">
+      <span class="ai-event">&#x1F514; ${a.event.replace('_',' ')}</span>
+      <span style="color:var(--muted)">Level: <b>${a.level}</b></span>
+      <span style="color:var(--muted);font-size:.72rem">${a.alert}</span>
+      <span class="ai-time">${new Date(a.ts).toLocaleTimeString()}</span>
+    </div>
+  `).join('');
+}
+
+function clearAlerts(id) { logs[id] = []; renderAlerts(id); }
+
+/* ══════════════════════════════════════════════════════════
+   COMMAND HELPERS
+══════════════════════════════════════════════════════════ */
+async function apiPost(url, body) {
+  const res = await fetch(url, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)
+  });
+  return res.json();
+}
+
+function clog(id, cls, msg) {
+  const c = document.getElementById(`console-${id}`);
+  if (!c) return;
+  const d = document.createElement('div');
+  d.className = `line ${cls}`;
+  d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  c.appendChild(d);
+  c.scrollTop = c.scrollHeight;
+}
+
+function toast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `show ${type}`;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.className = '', 3500);
+}
+
+/* ── Sensitivity ── */
+async function setSensitivity(id) {
+  const val = +document.getElementById(`sens-slider-${id}`).value;
+  try {
+    const r = await apiPost(`/api/devices/${encodeURIComponent(id)}/command`, { command:'set_sensitivity', value:val });
+    clog(id,'ok',`set_sensitivity=${val} → ${JSON.stringify(r)}`);
+    toast(`Sensitivity set to ${val}`, 'ok');
+  } catch(e) { clog(id,'err','set_sensitivity failed: '+e.message); toast('Failed: '+e.message,'err'); }
+}
+
+/* ── Calibrate ── */
+async function calibrate(id) {
+  clog(id,'warn','Calibrating… (5 s)');
+  try {
+    const r = await apiPost(`/api/devices/${encodeURIComponent(id)}/calibrate`, { duration:5000 });
+    clog(id,'ok','Calibration: '+JSON.stringify(r));
+    toast(r.message || r.error, r.success ? 'ok' : 'err');
+  } catch(e) { clog(id,'err','Calibrate failed: '+e.message); toast('Failed','err'); }
+}
+
+/* ── Auto-tune ── */
+async function autoTune(id) {
+  try {
+    const r = await apiPost(`/api/devices/${encodeURIComponent(id)}/auto-tune`, { targetSensitivity:5 });
+    clog(id, r.success?'ok':'err', 'auto-tune: '+JSON.stringify(r));
+    toast(r.success ? `Auto-tune done. Sensitivity: ${r.current?.recommended_sensitivity}` : (r.error||'Failed'), r.success?'ok':'err');
+  } catch(e) { clog(id,'err','auto-tune failed: '+e.message); toast('Failed','err'); }
+}
+
+async function autoTuneTarget(id) {
+  const t = +document.getElementById(`autotune-target-${id}`).value || 5;
+  try {
+    const r = await apiPost(`/api/devices/${encodeURIComponent(id)}/auto-tune`, { targetSensitivity:t });
+    clog(id, r.success?'ok':'err', `auto-tune(target=${t}): `+JSON.stringify(r));
+    toast(r.success ? `Auto-tune done. Sensitivity: ${r.current?.recommended_sensitivity}` : (r.error||'Failed'), r.success?'ok':'err');
+  } catch(e) { clog(id,'err','auto-tune failed: '+e.message); toast('Failed','err'); }
+}
+
+/* ── Thresholds ── */
+async function sendThresholds(id) {
+  const quiet   = +document.getElementById(`thr-quiet-${id}`).value;
+  const light   = +document.getElementById(`thr-light-${id}`).value;
+  const restless= +document.getElementById(`thr-restless-${id}`).value;
+
+  try {
+    const r = await apiPost(`/api/devices/${encodeURIComponent(id)}/command`, {
+      command: 'set_thresholds',
+      value: { quiet, light_activity: light, restless }
+    });
+    clog(id,'ok',`set_thresholds q=${quiet} l=${light} r=${restless} → ${JSON.stringify(r)}`);
+    toast('Thresholds applied','ok');
+  } catch(e) { clog(id,'err','Threshold send failed: '+e.message); toast('Failed','err'); }
+}
+
+/* ── Quick cmd ── */
+async function sendCmd(id, cmd) {
+  try {
+    const r = await apiPost(`/api/devices/${encodeURIComponent(id)}/command`, { command:cmd });
+    clog(id,'ok',`${cmd} → ${JSON.stringify(r)}`);
+    toast(`Sent: ${cmd}`, 'ok');
+  } catch(e) { clog(id,'err',`${cmd} failed: `+e.message); toast('Failed','err'); }
+}
+
+/* ── Custom cmd ── */
+async function sendCustomCmd(id) {
+  const cmd = document.getElementById(`custom-cmd-${id}`).value.trim();
+  const val = document.getElementById(`custom-val-${id}`).value.trim();
+  if (!cmd) { toast('Enter a command','warn'); return; }
+  const body = { command: cmd };
+  if (val !== '') {
+    body.value = isNaN(val) ? val : +val;
+  }
+  try {
+    const r = await apiPost(`/api/devices/${encodeURIComponent(id)}/command`, body);
+    clog(id,'ok',`${cmd}${val?' val='+val:''} → ${JSON.stringify(r)}`);
+    toast(`Sent: ${cmd}`, 'ok');
+  } catch(e) { clog(id,'err',`${cmd} failed: `+e.message); toast('Failed','err'); }
+}
+
+/* ── Raw JSON ── */
+async function sendRawJson(id) {
+  const raw = document.getElementById(`raw-json-${id}`).value.trim();
+  let body;
+  try { body = JSON.parse(raw); }
+  catch(e) { clog(id,'err','Invalid JSON: '+e.message); toast('Invalid JSON','err'); return; }
+
+  // determine endpoint
+  const url = body.command
+    ? `/api/devices/${encodeURIComponent(id)}/command`
+    : `/api/devices/${encodeURIComponent(id)}/command`;
+
+  try {
+    const r = await apiPost(url, body);
+    clog(id,'ok','raw → '+JSON.stringify(r));
+    toast('Sent','ok');
+  } catch(e) { clog(id,'err','raw send failed: '+e.message); toast('Failed','err'); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   DOM helpers
+══════════════════════════════════════════════════════════ */
+function set(id,html)    { const e=document.getElementById(id); if(e) e.innerHTML=html; }
+function setText(id,val) { const e=document.getElementById(id); if(e) e.textContent=val; }
+function setHtml(id,val) { const e=document.getElementById(id); if(e) e.innerHTML=val; }
+function setClass(id,cls){ const e=document.getElementById(id); if(e) e.className=cls; }
+function setStyle(id,p,v){ const e=document.getElementById(id); if(e) e.style[p]=v; }
+function setVal(id,v)    { const e=document.getElementById(id); if(e && !e.matches(':focus')) e.value=v; }
+
+/* ══════════════════════════════════════════════════════════
+   BOOT
+══════════════════════════════════════════════════════════ */
+connect();
+poll();
+setInterval(poll, 2000);
+</script>
+</body>
+</html>
