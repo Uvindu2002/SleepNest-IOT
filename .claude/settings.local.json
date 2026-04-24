@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo \"Test\")",
+      "Read(//tmp/**)",
+      "Bash(cat)",
+      "Bash(cp /tmp/part1.md \"/d/iot/New folder/kukka_arduino/CLAUDE.md\")"
+    ]
+  }
+}
