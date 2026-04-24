@@ -1,0 +1,112 @@
+#include <DHT.h>
+
+#define DHTPIN 4
+#define DHTTYPE DHT11
+#define PIR_PIN 5
+#define LDR_PIN A0
+
+DHT dht(DHTPIN, DHTTYPE);
+
+int motionState = 0;
+int lastMotionState = 0;
+unsigned long motionStartTime = 0;
+int motionCount = 0;
+int lightLevel = 0;
+float temperature = 0;
+float humidity = 0;
+
+unsigned long lastSensorRead = 0;
+
+void setup() {
+    Serial.begin(9600);
+    
+    pinMode(PIR_PIN, INPUT);
+    pinMode(LED_BUILTIN, OUTPUT);
+    
+    dht.begin();
+    
+    // Startup blink
+    for (int i = 0; i < 3; i++) {
+        digitalWrite(LED_BUILTIN, HIGH);
+        delay(200);
+        digitalWrite(LED_BUILTIN, LOW);
+        delay(200);
+    }
+    
+    Serial.println("Arduino Ready");
+}
+
+void readPIR() {
+    int reading = digitalRead(PIR_PIN);
+    
+    if (reading == HIGH && lastMotionState == LOW) {
+        motionState = HIGH;
+        motionCount++;
+        motionStartTime = millis();
+        digitalWrite(LED_BUILTIN, HIGH);
+        sendSensorData();
+    } 
+    else if (reading == LOW && motionState == HIGH && (millis() - motionStartTime > 2000)) {
+        motionState = LOW;
+        digitalWrite(LED_BUILTIN, LOW);
+        sendSensorData();
+    }
+    
+    lastMotionState = reading;
+}
+
+void readDHT() {
+    float t = dht.readTemperature();
+    float h = dht.readHumidity();
+    
+    if (!isnan(t) && !isnan(h)) {
+        temperature = t;
+        humidity = h;
+    }
+}
+
+void readLDR() {
+    lightLevel = analogRead(LDR_PIN);
+}
+
+void sendSensorData() {
+    // Send in clean format without extra markers
+    Serial.print("T:");
+    Serial.print(temperature, 1);
+    Serial.print(",H:");
+    Serial.print(humidity, 1);
+    Serial.print(",M:");
+    Serial.print(motionState);
+    Serial.print(",MC:");
+    Serial.print(motionCount);
+    Serial.print(",L:");
+    Serial.println(lightLevel);
+}
+
+void loop() {
+    unsigned long now = millis();
+    
+    // Check for commands from ESP32
+    if (Serial.available()) {
+        String cmd = Serial.readStringUntil('\n');
+        cmd.trim();
+        
+        if (cmd == "GET_DATA") {
+            sendSensorData();
+        }
+    }
+    
+    // Read sensors every 2 seconds
+    if (now - lastSensorRead > 2000) {
+        lastSensorRead = now;
+        
+        readDHT();
+        readLDR();
+        readPIR();
+        
+        // Send periodic data
+        sendSensorData();
+    }
+    
+    delay(10);
+}

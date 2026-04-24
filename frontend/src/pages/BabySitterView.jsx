@@ -215,7 +215,7 @@ export default function BabySitterView() {
               emoji="🌡️"
               value={fmtTemp(temp)}
               label="Temperature"
-              sub={temp != null && temp > 24 ? '⚠️ Above ideal' : temp != null && temp < 18 ? '⬇️ Below ideal' : '✅ Ideal range'}
+              sub={temp != null && temp > 26 ? '⚠️ Above ideal' : temp != null && temp < 18 ? '⬇️ Below ideal' : '✅ Ideal range'}
               gradFrom="from-orange-50" gradTo="to-red-50 dark:from-[#1E1510] dark:to-[#1E1510]"
               valColor="#F07848"
             />
@@ -305,14 +305,14 @@ export default function BabySitterView() {
             <span className="text-xl">🌡️</span>
             <div>
               <div className="text-xs font-bold text-gray-700 dark:text-gray-200">Room Temperature</div>
-              <div className="text-[10px] text-gray-400">Ideal: 18°C – 22°C</div>
+              <div className="text-[10px] text-gray-400">Ideal: 18°C – 26°C</div>
             </div>
           </div>
           {[
             { label: 'Too Cold',  range: 'Below 18°C', color: '#0EA5E9', active: temp != null && temp < 18 },
-            { label: 'Perfect ✅', range: '18°C – 22°C', color: '#3B9E72', active: temp != null && temp >= 18 && temp <= 22 },
-            { label: 'Warm',      range: '22°C – 25°C', color: '#F59E0B', active: temp != null && temp > 22 && temp <= 25 },
-            { label: 'Too Hot ⚠️',range: 'Above 25°C', color: '#EF4444', active: temp != null && temp > 25 },
+            { label: 'Perfect ✅', range: '18°C – 26°C', color: '#3B9E72', active: temp != null && temp >= 18 && temp <= 26 },
+            { label: 'Warm',      range: '26°C – 28°C', color: '#F59E0B', active: temp != null && temp > 26 && temp <= 28 },
+            { label: 'Too Hot ⚠️',range: 'Above 28°C', color: '#EF4444', active: temp != null && temp > 28 },
           ].map(({ label, range, color, active }) => (
             <div key={label} className={`flex items-center justify-between px-3 py-1.5 rounded-lg mb-1.5 transition-all ${active ? 'shadow-sm' : 'opacity-40'}`}
               style={active ? { backgroundColor: color + '18', border: `1px solid ${color}55` } : { border: '1px solid transparent' }}>

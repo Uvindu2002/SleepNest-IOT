@@ -38,7 +38,7 @@ export default function CurrentState({ style }) {
             <div className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">🌡️ Temp</div>
             <div className="text-lg font-extrabold text-gray-800 dark:text-gray-100 leading-none">{fmtTemp(temp)}</div>
             <div className="text-[9px] text-gray-400 mt-1">
-              {temp != null && temp > 24 ? '⚠️ Above ideal' : temp != null && temp < 18 ? '⬇️ Below ideal' : '✅ Good'}
+              {temp != null && temp > 26 ? '⚠️ Above ideal' : temp != null && temp < 18 ? '⬇️ Below ideal' : '✅ Good'}
             </div>
           </div>
         </div>

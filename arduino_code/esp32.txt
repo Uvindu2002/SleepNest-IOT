@@ -1,0 +1,427 @@
+#include <Arduino.h>
+#include <driver/i2s.h>
+#include <WiFi.h>
+#include <WebSocketsClient.h>
+#include <ArduinoJson.h>
+
+// ========== WiFi Configuration ==========
+const char* ssid = "ssid_password";
+const char* password = "dulina@2001";
+
+// ========== WebSocket Server Configuration ==========
+const char* ws_host = "192.168.8.171";
+const int ws_port = 3007;
+const char* ws_path = "/";
+const char* device_id = "ESP32_GREENHOUSE_01";
+
+// ========== I2S Microphone (INMP441) Configuration ==========
+#define I2S_WS 15
+#define I2S_SCK 14
+#define I2S_SD 32
+
+#define SAMPLE_RATE 16000
+#define BUFFER_SIZE 512
+#define CRY_THRESHOLD_MULTIPLIER 2.5f
+#define CRY_CONFIRM_COUNT 3
+
+// ========== Serial Communication ==========
+HardwareSerial SerialUno(2);  // UART2: RX=GPIO17, TX=GPIO16
+
+// ========== WebSocket Object ==========
+WebSocketsClient webSocket;
+
+// ========== Audio Detection Variables ==========
+int32_t samples[BUFFER_SIZE];
+int baselineNoise = 0;
+bool isCalibrated = false;
+int cryTriggerCount = 0;
+bool currentCryState = false;
+int currentAmplitude = 0;
+
+// ========== Arduino Sensor Data ==========
+struct SensorData {
+    float temperature = 0;
+    float humidity = 0;
+    int motion = 0;
+    int motionCount = 0;
+    int lightLevel = 0;
+    unsigned long lastUpdate = 0;
+    bool hasData = false;
+} arduinoData;
+
+// ========== Timing Variables ==========
+unsigned long lastWebSocketHeartbeat = 0;
+unsigned long lastDataSendTime = 0;
+unsigned long lastReconnectAttempt = 0;
+unsigned long lastArduinoRequest = 0;
+unsigned long lastArduinoCheck = 0;
+
+const unsigned long HEARTBEAT_INTERVAL = 30000;
+const unsigned long DATA_SEND_INTERVAL = 2000;
+const unsigned long ARDUINO_REQUEST_INTERVAL = 3000;
+
+// ========== I2S Initialization ==========
+void initI2SMicrophone() {
+    i2s_config_t i2s_config = {
+        .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
+        .sample_rate = SAMPLE_RATE,
+        .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT,
+        .channel_format = I2S_CHANNEL_FMT_ONLY_LEFT,
+        .communication_format = I2S_COMM_FORMAT_STAND_I2S,
+        .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
+        .dma_buf_count = 8,
+        .dma_buf_len = BUFFER_SIZE,
+        .use_apll = false,
+        .tx_desc_auto_clear = false,
+        .fixed_mclk = 0
+    };
+    
+    i2s_pin_config_t pin_config = {
+        .bck_io_num = I2S_SCK,
+        .ws_io_num = I2S_WS,
+        .data_out_num = I2S_PIN_NO_CHANGE,
+        .data_in_num = I2S_SD
+    };
+    
+    esp_err_t err = i2s_driver_install(I2S_NUM_0, &i2s_config, 0, NULL);
+    if (err != ESP_OK) {
+        Serial.println("❌ I2S Driver installation failed!");
+        return;
+    }
+    
+    err = i2s_set_pin(I2S_NUM_0, &pin_config);
+    if (err != ESP_OK) {
+        Serial.println("❌ I2S Pin configuration failed!");
+        return;
+    }
+    
+    Serial.println("✅ I2S Microphone Initialized");
+}
+
+// ========== Calibrate Noise Floor ==========
+void calibrateNoiseFloor() {
+    Serial.println("🔇 Calibrating noise floor... Keep room quiet!");
+    long total = 0;
+    int samplesCount = 0;
+    
+    for (int i = 0; i < 100; i++) {
+        size_t bytesRead;
+        i2s_read(I2S_NUM_0, samples, sizeof(int32_t) * BUFFER_SIZE, &bytesRead, portMAX_DELAY);
+        
+        int samplesRead = bytesRead / sizeof(int32_t);
+        for (int j = 0; j < samplesRead; j++) {
+            total += abs(samples[j] >> 14);
+            samplesCount++;
+        }
+        delay(10);
+    }
+    
+    baselineNoise = total / samplesCount;
+    isCalibrated = true;
+    
+    Serial.printf("✅ Baseline noise: %d | Threshold: %d\n", 
+                  baselineNoise, (int)(baselineNoise * CRY_THRESHOLD_MULTIPLIER));
+}
+
+// ========== Capture Audio ==========
+int16_t captureAudioAndDetect() {
+    size_t bytesRead;
+    i2s_read(I2S_NUM_0, samples, sizeof(int32_t) * BUFFER_SIZE, &bytesRead, portMAX_DELAY);
+    
+    int samplesRead = bytesRead / sizeof(int32_t);
+    int32_t maxAmplitude = 0;
+    
+    for (int i = 0; i < samplesRead; i++) {
+        int32_t sample = abs(samples[i] >> 14);
+        if (sample > maxAmplitude) {
+            maxAmplitude = sample;
+        }
+    }
+    
+    currentAmplitude = (int16_t)maxAmplitude;
+    
+    if (!isCalibrated) {
+        return currentAmplitude;
+    }
+    
+    int dynamicThreshold = baselineNoise * CRY_THRESHOLD_MULTIPLIER;
+    bool isLoud = (currentAmplitude > dynamicThreshold);
+    
+    if (isLoud) {
+        cryTriggerCount++;
+        if (cryTriggerCount >= CRY_CONFIRM_COUNT && !currentCryState) {
+            currentCryState = true;
+            Serial.println("🔴 BABY CRY DETECTED!");
+        }
+    } else {
+        if (currentCryState && cryTriggerCount > 0) {
+            cryTriggerCount--;
+            if (cryTriggerCount <= 0) {
+                currentCryState = false;
+                Serial.println("🟢 Cry ended");
+            }
+        } else {
+            cryTriggerCount = max(0, cryTriggerCount - 1);
+        }
+    }
+    
+    return currentAmplitude;
+}
+
+// ========== IMPROVED: Parse Arduino Data ==========
+void parseArduinoData() {
+    // Read all available data
+    while (SerialUno.available()) {
+        String data = SerialUno.readStringUntil('\n');
+        data.trim();
+        
+        if (data.length() == 0) continue;
+        
+        // Remove any start/end markers if present
+        if (data.startsWith(">")) {
+            data = data.substring(1);
+        }
+        if (data.endsWith("<")) {
+            data = data.substring(0, data.length() - 1);
+        }
+        
+        // Debug raw data
+        Serial.print("📥 Arduino: ");
+        Serial.println(data);
+        
+        // Parse format: "T:31.70,H:59.00,M:0,MC:7,L:359"
+        int tIndex = data.indexOf("T:");
+        int hIndex = data.indexOf(",H:");
+        int mIndex = data.indexOf(",M:");
+        int mcIndex = data.indexOf(",MC:");
+        int lIndex = data.indexOf(",L:");
+        
+        if (tIndex != -1 && hIndex != -1 && mIndex != -1 && mcIndex != -1 && lIndex != -1) {
+            arduinoData.temperature = data.substring(tIndex + 2, hIndex).toFloat();
+            arduinoData.humidity = data.substring(hIndex + 3, mIndex).toFloat();
+            arduinoData.motion = data.substring(mIndex + 3, mcIndex).toInt();
+            arduinoData.motionCount = data.substring(mcIndex + 4, lIndex).toInt();
+            arduinoData.lightLevel = data.substring(lIndex + 3).toInt();
+            arduinoData.lastUpdate = millis();
+            arduinoData.hasData = true;
+            
+            Serial.printf("✅ Temp:%.1f°C Hum:%.1f%% Motion:%d Light:%d\n",
+                         arduinoData.temperature, arduinoData.humidity,
+                         arduinoData.motion, arduinoData.lightLevel);
+        }
+    }
+}
+
+// ========== Request Arduino Data ==========
+void requestArduinoData() {
+    SerialUno.println("GET_DATA");
+    Serial.println("📤 Requested data from Arduino");
+}
+
+// ========== WebSocket Functions ==========
+void webSocketEvent(WStype_t type, uint8_t* payload, size_t length) {
+    switch(type) {
+        case WStype_DISCONNECTED:
+            Serial.println("🔴 WebSocket Disconnected");
+            break;
+        case WStype_CONNECTED:
+            Serial.println("🟢 WebSocket Connected");
+            sendDeviceRegistration();
+            break;
+        case WStype_TEXT:
+            handleIncomingMessage((char*)payload);
+            break;
+        case WStype_ERROR:
+            Serial.println("❌ WebSocket Error");
+            break;
+    }
+}
+
+void sendDeviceRegistration() {
+    StaticJsonDocument<256> doc;
+    doc["type"] = "register";
+    doc["deviceId"] = device_id;
+    doc["ip"] = WiFi.localIP().toString();
+    doc["rssi"] = WiFi.RSSI();
+    doc["sensors"] = "INMP441,DHT11,PIR,LDR";
+    
+    String json;
+    serializeJson(doc, json);
+    webSocket.sendTXT(json);
+    Serial.println("📤 Device registration sent");
+}
+
+void sendSensorData() {
+    StaticJsonDocument<768> doc;
+    
+    doc["type"] = "sensor_data";
+    doc["deviceId"] = device_id;
+    doc["timestamp"] = millis();
+    doc["rssi"] = WiFi.RSSI();
+    
+    JsonObject audio = doc.createNestedObject("audio");
+    audio["crying"] = currentCryState;
+    audio["amplitude"] = currentAmplitude;
+    audio["baseline_noise"] = baselineNoise;
+    audio["threshold"] = (int)(baselineNoise * CRY_THRESHOLD_MULTIPLIER);
+    audio["calibrated"] = isCalibrated;
+    
+    JsonObject sensors = doc.createNestedObject("sensors");
+    sensors["temperature"] = arduinoData.temperature;
+    sensors["humidity"] = arduinoData.humidity;
+    sensors["motion"] = arduinoData.motion;
+    sensors["motion_count"] = arduinoData.motionCount;
+    sensors["light"] = arduinoData.lightLevel;
+    
+    String alertLevel = "Quiet";
+    if (currentCryState) {
+        alertLevel = "CRYING";
+    } else if (isCalibrated && currentAmplitude > baselineNoise * 2.0f) {
+        alertLevel = "Restless";
+    } else if (isCalibrated && currentAmplitude > baselineNoise * 1.5f) {
+        alertLevel = "Light Activity";
+    }
+    doc["alert_level"] = alertLevel;
+    
+    String json;
+    serializeJson(doc, json);
+    
+    if (webSocket.isConnected()) {
+        webSocket.sendTXT(json);
+        Serial.println("📤 Data sent to server");
+    }
+}
+
+void sendHeartbeat() {
+    StaticJsonDocument<128> doc;
+    doc["type"] = "heartbeat";
+    doc["deviceId"] = device_id;
+    doc["timestamp"] = millis();
+    doc["rssi"] = WiFi.RSSI();
+    
+    String json;
+    serializeJson(doc, json);
+    webSocket.sendTXT(json);
+}
+
+void handleIncomingMessage(String message) {
+    StaticJsonDocument<256> doc;
+    if (deserializeJson(doc, message)) {
+        return;
+    }
+    
+    const char* type = doc["type"];
+    if (strcmp(type, "command") != 0) return;
+    
+    const char* command = doc["command"];
+    
+    if (strcmp(command, "restart") == 0) {
+        ESP.restart();
+    }
+    else if (strcmp(command, "recalibrate") == 0) {
+        isCalibrated = false;
+        calibrateNoiseFloor();
+    }
+    else if (strcmp(command, "get_status") == 0) {
+        sendSensorData();
+    }
+}
+
+// ========== WiFi Connection ==========
+void connectToWiFi() {
+    Serial.print("📡 Connecting to WiFi");
+    WiFi.begin(ssid, password);
+    WiFi.setSleep(false);
+    
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 60) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+    }
+    
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("\n✅ WiFi Connected!");
+        Serial.print("📱 IP: "); Serial.println(WiFi.localIP());
+    } else {
+        Serial.println("\n❌ WiFi Connection Failed!");
+    }
+}
+
+void initializeWebSocket() {
+    webSocket.begin(ws_host, ws_port, ws_path);
+    webSocket.setReconnectInterval(2000);
+    webSocket.enableHeartbeat(15000, 3000, 2);
+    webSocket.onEvent(webSocketEvent);
+}
+
+// ========== Setup ==========
+void setup() {
+    Serial.begin(115200);
+    SerialUno.begin(9600, SERIAL_8N1, 17, 16);
+    
+    delay(1000);
+    Serial.println("\n=== ESP32 Baby Cry Monitor ===");
+    
+    initI2SMicrophone();
+    delay(500);
+    calibrateNoiseFloor();
+    
+    connectToWiFi();
+    initializeWebSocket();
+    
+    Serial.println("\n✅ System Ready!");
+    Serial.println("Waiting for Arduino data...");
+}
+
+// ========== Main Loop ==========
+void loop() {
+    unsigned long now = millis();
+    
+    webSocket.loop();
+    
+    if (!webSocket.isConnected()) {
+        if (now - lastReconnectAttempt > 5000) {
+            lastReconnectAttempt = now;
+            webSocket.begin(ws_host, ws_port, ws_path);
+        }
+    }
+    
+    if (now - lastWebSocketHeartbeat > HEARTBEAT_INTERVAL) {
+        lastWebSocketHeartbeat = now;
+        if (webSocket.isConnected()) {
+            sendHeartbeat();
+        }
+    }
+    
+    captureAudioAndDetect();
+    
+    // Request and parse Arduino data
+    if (now - lastArduinoRequest > ARDUINO_REQUEST_INTERVAL) {
+        lastArduinoRequest = now;
+        requestArduinoData();
+    }
+    
+    parseArduinoData();
+    
+    if (now - lastDataSendTime > DATA_SEND_INTERVAL) {
+        lastDataSendTime = now;
+        if (webSocket.isConnected() && isCalibrated && arduinoData.hasData) {
+            sendSensorData();
+        }
+    }
+    
+    // Debug output
+    static unsigned long lastDebug = 0;
+    if (now - lastDebug > 2000) {
+        lastDebug = now;
+        Serial.printf("🎤 Amp:%d | Cry:%s | 🌡️%.1f°C | 💡%d | 🚶%d\n",
+                     currentAmplitude,
+                     currentCryState ? "YES" : "NO",
+                     arduinoData.temperature,
+                     arduinoData.lightLevel,
+                     arduinoData.motion);
+    }
+    
+    delay(10);
+}

@@ -1,0 +1,18 @@
+{"timestamp":1776982817193,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":247,"sound_alert":"CRYING DETECTED! ⚠️","timestamp":1776982817193}}
+{"timestamp":1776982819165,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":143,"sound_alert":"CRYING DETECTED! ⚠️","timestamp":1776982819165}}
+{"timestamp":1776982821195,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":709,"sound_alert":"CRYING DETECTED! ⚠️","timestamp":1776982821195}}
+{"timestamp":1776982823202,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":82,"sound_alert":"CRYING DETECTED! ⚠️","timestamp":1776982823202}}
+{"timestamp":1776982825218,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":63,"sound_alert":"CRYING DETECTED! ⚠️","timestamp":1776982825218}}
+{"timestamp":1776982827247,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":75,"sound_alert":"CRYING DETECTED! ⚠️","timestamp":1776982827247}}
+{"timestamp":1776982829257,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":221,"sound_alert":"CRYING DETECTED! ⚠️","timestamp":1776982829257}}
+{"timestamp":1776982831262,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":124,"sound_alert":"CRYING DETECTED! ⚠️","timestamp":1776982831262}}
+{"timestamp":1776982833280,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":149,"sound_alert":"CRYING DETECTED! ⚠️","timestamp":1776982833280}}
+{"timestamp":1776982835299,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":179,"sound_alert":"CRYING DETECTED! ⚠️","timestamp":1776982835299}}
+{"timestamp":1776982837363,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":270,"sound_alert":"CRYING DETECTED! ⚠️","timestamp":1776982837363}}
+{"timestamp":1776982873611,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":57,"sound_alert":"Quiet","timestamp":1776982873611}}
+{"timestamp":1776982875613,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":59,"sound_alert":"Quiet","timestamp":1776982875613}}
+{"timestamp":1776982877635,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":63,"sound_alert":"Quiet","timestamp":1776982877635}}
+{"timestamp":1776983141803,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":157,"sound_alert":"CRYING DETECTED! ⚠️","timestamp":1776983141803}}
+{"timestamp":1776983143849,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":230,"sound_alert":"CRYING DETECTED! ⚠️","timestamp":1776983143849}}
+{"timestamp":1776983145761,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":76,"sound_alert":"CRYING DETECTED! ⚠️","timestamp":1776983145761}}
+{"timestamp":1776983147776,"type":"motion","deviceId":"ESP32_GREENHOUSE_01","data":{"sound_level":145,"sound_alert":"CRYING DETECTED! ⚠️","timestamp":1776983147776}}

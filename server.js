@@ -66,6 +66,73 @@ function logToFile(type, deviceId, data) {
   fs.appendFileSync(logFile, JSON.stringify(logEntry) + '\n');
 }
 
+// ========== FORMAT ADAPTER FOR ESP32 DATA ==========
+// Converts new ESP32 format (with audio/sensors objects) to legacy format
+function adaptESP32DataFormat(data) {
+  // Check if this is the new format (has 'audio' and 'sensors' objects)
+  if (data.audio && data.sensors) {
+    console.log('🔄 Adapting new ESP32 format to legacy format');
+    
+    const audio = data.audio || {};
+    const sensors = data.sensors || {};
+    
+    // Map amplitude to appropriate scale (0-1023 for legacy)
+    const amplitude = audio.amplitude || 0;
+    const mappedAmplitude = Math.min(1023, Math.floor(amplitude / 4)); // Convert from 0-4095 to 0-1023
+    
+    // Determine alert level string
+    let soundAlert = 'Quiet';
+    if (audio.crying) {
+      soundAlert = 'CRYING DETECTED! ⚠️';
+    } else if (data.alert_level === 'Restless') {
+      soundAlert = 'Restless';
+    } else if (data.alert_level === 'Light Activity') {
+      soundAlert = 'Light Activity';
+    }
+    
+    return {
+      type: data.type,
+      deviceId: data.deviceId,
+      timestamp: data.timestamp,
+      rssi: data.rssi,
+      free_heap: data.free_heap,
+      
+      // Sound data mapping for legacy system
+      sound: mappedAmplitude,
+      sound_raw: amplitude,
+      sound_diff: amplitude,
+      sound_baseline: audio.baseline_noise || 0,
+      sound_sensitivity: 5,
+      sound_alert: soundAlert,
+      sound_digital: audio.crying ? 1 : 0,
+      sound_calibrated: audio.calibrated || false,
+      
+      // Thresholds (reasonable defaults)
+      quiet_threshold: 25,
+      light_activity_threshold: 80,
+      restless_threshold: 200,
+      crying_threshold: 400,
+      noise_floor: 25,
+      
+      // Sensor data
+      temperature: sensors.temperature || 0,
+      humidity: sensors.humidity || 0,
+      motion: sensors.motion || 0,
+      motion_count: sensors.motion_count || 0,
+      light: sensors.light || 0,
+      motion_duration: 0,
+      
+      // Preserve original data for debugging
+      _original_crying: audio.crying,
+      _original_amplitude: amplitude,
+      _original_alert_level: data.alert_level
+    };
+  }
+  
+  // Return original format if already legacy
+  return data;
+}
+
 // Sound processor that matches ESP32 data format
 class SoundProcessor {
   constructor(deviceId) {
@@ -197,11 +264,9 @@ class SoundProcessor {
       peak: this.peakValue,
       peak_detected: this.peakDetected,
       energy: Math.round(this.energyLevel),
-      // Additional metrics
       stability: this.calculateStability(),
       trend: this.calculateTrend(),
       volatility: this.calculateVolatility(),
-      // ESP32 thresholds for reference
       thresholds: {
         quiet: data.quiet_threshold || 6,
         light_activity: data.light_activity_threshold || 20,
@@ -216,7 +281,6 @@ class SoundProcessor {
     const mean = recent.reduce((a, b) => a + b, 0) / recent.length;
     const variance = recent.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / recent.length;
     const stdDev = Math.sqrt(variance);
-    // Lower stdDev = more stable
     return Math.max(0, Math.min(100, 100 - (stdDev * 2)));
   }
   
@@ -257,10 +321,9 @@ class AlertSystem {
     
     if (!lastAlert) return true;
     
-    // Different cooldowns for different events
     let cooldown = CONFIG.alertCooldown;
-    if (eventType === 'CRYING') cooldown = 10000; // 10 seconds for crying
-    if (eventType === 'RESTLESS') cooldown = 5000; // 5 seconds for restless
+    if (eventType === 'CRYING') cooldown = 10000;
+    if (eventType === 'RESTLESS') cooldown = 5000;
     
     return (now - lastAlert) > cooldown;
   }
@@ -365,7 +428,6 @@ app.get('/api/devices/:deviceId/sound/analysis', (req, res) => {
   
   const recentSound = history.filter(h => h.sound_level !== undefined).slice(-100);
   
-  // Calculate sound distribution over time
   const distribution = {
     QUIET: recentSound.filter(h => h.sound_event === 'QUIET').length,
     LIGHT_ACTIVITY: recentSound.filter(h => h.sound_event === 'LIGHT_ACTIVITY').length,
@@ -373,12 +435,11 @@ app.get('/api/devices/:deviceId/sound/analysis', (req, res) => {
     CRYING: recentSound.filter(h => h.sound_event === 'CRYING').length
   };
   
-  // Calculate average by time of day
   const timeOfDay = {
-    night: { count: 0, sum: 0 }, // 22-6
-    morning: { count: 0, sum: 0 }, // 6-12
-    afternoon: { count: 0, sum: 0 }, // 12-18
-    evening: { count: 0, sum: 0 } // 18-22
+    night: { count: 0, sum: 0 },
+    morning: { count: 0, sum: 0 },
+    afternoon: { count: 0, sum: 0 },
+    evening: { count: 0, sum: 0 }
   };
   
   recentSound.forEach(entry => {
@@ -430,7 +491,7 @@ app.get('/api/devices/:deviceId/sound/analysis', (req, res) => {
   });
 });
 
-// Generic command endpoint (used by frontend Settings page)
+// Generic command endpoint
 app.post('/api/devices/:deviceId/command', (req, res) => {
   const { deviceId } = req.params;
   const { command, value } = req.body;
@@ -445,24 +506,21 @@ app.post('/api/devices/:deviceId/command', (req, res) => {
 // Sound calibration endpoint
 app.post('/api/devices/:deviceId/calibrate', async (req, res) => {
   const { deviceId } = req.params;
-  const { duration = 5000 } = req.body; // Calibration duration in ms
+  const { duration = 5000 } = req.body;
   
   const device = devices.get(deviceId);
   if (!device || !device.ws || device.ws.readyState !== WebSocket.OPEN) {
     return res.status(404).json({ error: 'Device not connected' });
   }
   
-  // Send calibration command
   device.ws.send(JSON.stringify({
     type: 'command',
     command: 'recalibrate_sound',
     timestamp: Date.now()
   }));
   
-  // Store calibration start time
   const calibrationStart = Date.now();
   
-  // Wait for calibration to complete
   const checkCalibration = () => {
     const processor = soundProcessors.get(deviceId);
     if (processor && processor.calibrated) {
@@ -497,7 +555,6 @@ app.post('/api/devices/:deviceId/auto-tune', async (req, res) => {
     return res.status(400).json({ error: 'Please calibrate the sensor first' });
   }
   
-  // Analyze recent sound levels to determine optimal sensitivity
   const history = deviceHistory.get(deviceId) || [];
   const recentSound = history.filter(h => h.sound_level !== undefined).slice(-100);
   
@@ -508,18 +565,14 @@ app.post('/api/devices/:deviceId/auto-tune', async (req, res) => {
   const avgSound = recentSound.reduce((sum, h) => sum + h.sound_level, 0) / recentSound.length;
   const maxSound = Math.max(...recentSound.map(h => h.sound_level));
   
-  // Calculate recommended sensitivity
   let recommendedSensitivity = targetSensitivity;
   
   if (avgSound < 100 && maxSound < 300) {
-    // Too quiet, increase sensitivity
     recommendedSensitivity = Math.min(CONFIG.sensitivityRange.max, targetSensitivity + 3);
   } else if (avgSound > 500 || maxSound > 900) {
-    // Too sensitive, decrease sensitivity
     recommendedSensitivity = Math.max(CONFIG.sensitivityRange.min, targetSensitivity - 2);
   }
   
-  // Send sensitivity command
   device.ws.send(JSON.stringify({
     type: 'command',
     command: 'set_sensitivity',
@@ -614,8 +667,11 @@ wss.on('connection', (ws, req) => {
         }));
       }
       
-      // Handle sensor data with enhanced sound processing
+      // Handle sensor data - WITH FORMAT ADAPTATION
       else if (data.type === 'sensor_data' && currentDeviceId) {
+        // ADAPT THE DATA FORMAT (new ESP32 format -> legacy format)
+        const adaptedData = adaptESP32DataFormat(data);
+        
         const device = devices.get(currentDeviceId);
         if (device) {
           device.lastSeen = Date.now();
@@ -623,93 +679,105 @@ wss.on('connection', (ws, req) => {
           // Get sound processor
           const processor = soundProcessors.get(currentDeviceId);
           
-          // Process sound data from ESP32 format
+          // Process sound data
           let processedSound = null;
           if (processor) {
-            processedSound = processor.processSoundData(data);
+            processedSound = processor.processSoundData(adaptedData);
           }
           
-          // Enhanced data storage - preserve all ESP32 fields
+          const soundLevel = adaptedData.sound || 0;
+          const percentage = Math.min(100, Math.round((soundLevel / 1023) * 100));
+          
+          let soundEvent = adaptedData.sound_alert || 'QUIET';
+          if (soundEvent === 'CRYING DETECTED! ⚠️') soundEvent = 'CRYING';
+          
+          // Enhanced data storage
           device.data = {
-            // Basic sensor data
-            temperature: data.temperature,
-            humidity: data.humidity,
-            motion: data.motion,
-            motion_count: data.motion_count,
-            motion_duration: data.motion_duration,
-            light: data.light,
+            temperature: adaptedData.temperature,
+            humidity: adaptedData.humidity,
+            motion: adaptedData.motion,
+            motion_count: adaptedData.motion_count,
+            motion_duration: adaptedData.motion_duration,
+            light: adaptedData.light,
             
-            // Sound data - all ESP32 fields preserved
-            sound_level: data.sound || 0,
-            sound_raw: data.sound_raw || 0,
-            sound_diff: data.sound_diff || 0,
-            sound_baseline: data.sound_baseline || 0,
-            sound_sensitivity: data.sound_sensitivity || CONFIG.sensitivityRange.default,
-            sound_alert: data.sound_alert || 'QUIET',
-            sound_digital: data.sound_digital || 0,
-            sound_calibrated: data.sound_calibrated || false,
+            sound_level: soundLevel,
+            sound_raw: adaptedData.sound_raw || 0,
+            sound_diff: adaptedData.sound_diff || 0,
+            sound_baseline: adaptedData.sound_baseline || 0,
+            sound_sensitivity: adaptedData.sound_sensitivity || CONFIG.sensitivityRange.default,
+            sound_alert: adaptedData.sound_alert || 'QUIET',
+            sound_digital: adaptedData.sound_digital || 0,
+            sound_calibrated: adaptedData.sound_calibrated || false,
             
-            // Processed data
-            sound_percentage: processedSound ? processedSound.percentage : 0,
-            sound_event: processedSound ? processedSound.event : data.sound_alert || 'QUIET',
+            sound_percentage: percentage,
+            sound_event: soundEvent,
             sound_peak: processedSound ? processedSound.peak : 0,
             sound_energy: processedSound ? processedSound.energy : 0,
             sound_stability: processedSound ? processedSound.stability : 100,
             sound_trend: processedSound ? processedSound.trend : 'stable',
             sound_volatility: processedSound ? processedSound.volatility : 0,
             
-            // Thresholds from ESP32
+            // New fields from ESP32
+            audio_crying: adaptedData._original_crying || false,
+            audio_amplitude: adaptedData._original_amplitude || soundLevel,
+            alert_level: adaptedData._original_alert_level || 'Quiet',
+            
             thresholds: {
-              quiet: data.quiet_threshold || 6,
-              light_activity: data.light_activity_threshold || 20,
-              restless: data.restless_threshold || 40
+              quiet: adaptedData.quiet_threshold || 25,
+              light_activity: adaptedData.light_activity_threshold || 80,
+              restless: adaptedData.restless_threshold || 200
             },
             
-            // Additional metrics
-            rssi: data.rssi,
-            free_heap: data.free_heap,
+            rssi: adaptedData.rssi,
+            free_heap: adaptedData.free_heap,
             timestamp: Date.now()
           };
           
           // Update device info
-          device.info.sensitivity = data.sound_sensitivity || device.info.sensitivity;
-          device.info.sound_calibrated = data.sound_calibrated || device.info.sound_calibrated;
-          device.info.sound_baseline = data.sound_baseline || device.info.sound_baseline;
+          if (adaptedData.sound_sensitivity) {
+            device.info.sensitivity = adaptedData.sound_sensitivity;
+          }
+          if (adaptedData.sound_calibrated !== undefined) {
+            device.info.sound_calibrated = adaptedData.sound_calibrated;
+          }
+          if (adaptedData.sound_baseline) {
+            device.info.sound_baseline = adaptedData.sound_baseline;
+          }
           
           // Update stats
           const stats = deviceStats.get(currentDeviceId);
           stats.totalReadings++;
-          const soundLevel = data.sound || 0;
           stats.avgSoundLevel = (stats.avgSoundLevel * (stats.totalReadings - 1) + soundLevel) / stats.totalReadings;
-          stats.currentSoundEvent = device.data.sound_event;
+          stats.currentSoundEvent = soundEvent;
           
-          if (device.data.sound_event) {
-            stats.soundEventCount[device.data.sound_event] = (stats.soundEventCount[device.data.sound_event] || 0) + 1;
+          if (soundEvent) {
+            stats.soundEventCount[soundEvent] = (stats.soundEventCount[soundEvent] || 0) + 1;
           }
           
           if (soundLevel > stats.peakSoundRecorded) {
             stats.peakSoundRecorded = soundLevel;
           }
           
-          if (data.motion === 1) {
+          if (adaptedData.motion === 1) {
             stats.motionCount++;
             stats.lastMotionTime = Date.now();
             
-            // Log motion with sound context
             logToFile('motion', currentDeviceId, {
               sound_level: soundLevel,
-              sound_alert: data.sound_alert,
+              sound_alert: adaptedData.sound_alert,
               timestamp: Date.now()
             });
           }
           
-          // ── Push to MongoDB batch buffer (non-blocking) ────────
-          dataBuffer.push(currentDeviceId, {
-            ...device.data,
-            comfort: device.data.comfort ?? null, // comfort computed in frontend; keep null if not available
-          });
-
-          // Store in memory history (for real-time API / charts)
+          // Push to MongoDB batch buffer
+          if (dataBuffer) {
+            dataBuffer.push(currentDeviceId, {
+              ...device.data,
+              comfort: device.data.comfort ?? null,
+            });
+          }
+          
+          // Store in memory history
           const history = deviceHistory.get(currentDeviceId);
           const historyEntry = {
             ...device.data,
@@ -717,62 +785,57 @@ wss.on('connection', (ws, req) => {
           };
           history.push(historyEntry);
           
-          // Keep only last N data points
           if (history.length > CONFIG.maxHistorySize) {
             history.shift();
           }
           
           // Store significant sound events
-          if (device.data.sound_event && device.data.sound_event !== 'QUIET') {
+          if (soundEvent !== 'QUIET') {
             const events = soundEvents.get(currentDeviceId);
             events.push({
               timestamp: Date.now(),
-              event: device.data.sound_event,
+              event: soundEvent,
               level: soundLevel,
-              raw: data.sound_raw,
-              diff: data.sound_diff,
+              raw: adaptedData.sound_raw,
+              diff: adaptedData.sound_diff,
               peak: processedSound ? processedSound.peak : 0,
-              alert: data.sound_alert,
-              motion_at_event: data.motion
+              alert: adaptedData.sound_alert,
+              motion_at_event: adaptedData.motion
             });
             
-            // Keep only last N events
             if (events.length > CONFIG.maxSoundEvents) {
               events.shift();
             }
             
-            // Check if we should alert
-            if (alertSystem.shouldAlert(currentDeviceId, device.data.sound_event, soundLevel)) {
-              alertSystem.recordAlert(currentDeviceId, device.data.sound_event);
+            // Check for alerts
+            if (alertSystem.shouldAlert(currentDeviceId, soundEvent, soundLevel)) {
+              alertSystem.recordAlert(currentDeviceId, soundEvent);
               
               const alert = {
                 timestamp: Date.now(),
                 deviceId: currentDeviceId,
-                event: device.data.sound_event,
+                event: soundEvent,
                 level: soundLevel,
-                raw: data.sound_raw,
-                diff: data.sound_diff,
-                message: `${device.data.sound_alert} Level: ${soundLevel} (Raw: ${data.sound_raw}, Diff: ${data.sound_diff})`
+                raw: adaptedData.sound_raw,
+                diff: adaptedData.sound_diff,
+                message: `${adaptedData.sound_alert || soundEvent} Level: ${soundLevel}`
               };
               
               soundAlerts.get(currentDeviceId).push(alert);
               console.log(`🔊 ALERT: ${alert.message}`);
-              
-              // Log alert
               logToFile('alerts', currentDeviceId, alert);
             }
           }
           
-          // Enhanced logging with visual representation
-          const soundBarLength = Math.floor(soundLevel / 40); // 0-1023 -> 0-25 bars
+          // Enhanced logging
+          const soundBarLength = Math.floor(soundLevel / 40);
           const soundBar = '█'.repeat(Math.min(soundBarLength, 25)) + '░'.repeat(Math.max(0, 25 - soundBarLength));
           let eventIcon = '⚪';
-          if (device.data.sound_event === 'CRYING') eventIcon = '🔴';
-          else if (device.data.sound_event === 'RESTLESS') eventIcon = '🟡';
-          else if (device.data.sound_event === 'LIGHT_ACTIVITY') eventIcon = '🟢';
+          if (soundEvent === 'CRYING') eventIcon = '🔴';
+          else if (soundEvent === 'RESTLESS') eventIcon = '🟡';
+          else if (soundEvent === 'LIGHT_ACTIVITY') eventIcon = '🟢';
           
-          const percentage = Math.round((soundLevel / 1023) * 100);
-          console.log(`📊 [${currentDeviceId}] T=${data.temperature?.toFixed(1)}°C | H=${data.humidity?.toFixed(1)}% | M=${data.motion} | S=${percentage}% (${soundLevel}) ${soundBar} ${eventIcon} ${device.data.sound_event} | Raw:${data.sound_raw} Diff:${data.sound_diff} | L=${data.light}`);
+          console.log(`📊 [${currentDeviceId}] T=${adaptedData.temperature?.toFixed(1)}°C | H=${adaptedData.humidity?.toFixed(1)}% | M=${adaptedData.motion} | S=${percentage}% (${soundLevel}) ${soundBar} ${eventIcon} ${soundEvent} | L=${adaptedData.light} | Cry:${device.data.audio_crying ? '🔴' : '⚪'}`);
         }
       }
       
@@ -870,7 +933,6 @@ setInterval(() => {
       
       if (processor) {
         console.log(`  📈 Trend: ${processor.calculateTrend()} | Stability: ${processor.calculateStability().toFixed(1)}%`);
-        console.log(`  📊 Raw Values: Last Raw=${processor.lastRawValue} | Last Diff=${processor.lastDiffValue}`);
       }
     }
   });
@@ -878,29 +940,25 @@ setInterval(() => {
   console.log('='.repeat(50));
 }, 3600000);
 
-// ─────────────────────────────────────────────────────────────────
 // ── Database API endpoints ────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────────
 
-/**
- * GET /api/db/readings?deviceId=X&limit=200&from=ISO&to=ISO
- * Returns batched reading docs from MongoDB (newest first).
- * Each doc covers ~30 s of data.
- */
 app.get('/api/db/readings', async (req, res) => {
   try {
-    const db       = getDb();
+    const db = getDb();
+    if (!db) {
+      return res.status(503).json({ error: 'MongoDB not connected' });
+    }
     const deviceId = req.query.deviceId;
-    const limit    = Math.min(parseInt(req.query.limit  || '200', 10), 2000);
-    const from     = req.query.from ? new Date(req.query.from) : null;
-    const to       = req.query.to   ? new Date(req.query.to)   : null;
+    const limit = Math.min(parseInt(req.query.limit || '200', 10), 2000);
+    const from = req.query.from ? new Date(req.query.from) : null;
+    const to = req.query.to ? new Date(req.query.to) : null;
 
     const filter = {};
     if (deviceId) filter.deviceId = deviceId;
     if (from || to) {
       filter.ts = {};
       if (from) filter.ts.$gte = from;
-      if (to)   filter.ts.$lte = to;
+      if (to) filter.ts.$lte = to;
     }
 
     const docs = await db.collection('readings')
@@ -916,18 +974,17 @@ app.get('/api/db/readings', async (req, res) => {
   }
 });
 
-/**
- * GET /api/db/events?deviceId=X&category=sound|motion&limit=100&from=ISO&to=ISO
- * Returns state-change events (motion start/end, sound alerts) from MongoDB.
- */
 app.get('/api/db/events', async (req, res) => {
   try {
-    const db       = getDb();
+    const db = getDb();
+    if (!db) {
+      return res.status(503).json({ error: 'MongoDB not connected' });
+    }
     const deviceId = req.query.deviceId;
-    const category = req.query.category; // 'sound' | 'motion' | undefined
-    const limit    = Math.min(parseInt(req.query.limit || '100', 10), 1000);
-    const from     = req.query.from ? new Date(req.query.from) : null;
-    const to       = req.query.to   ? new Date(req.query.to)   : null;
+    const category = req.query.category;
+    const limit = Math.min(parseInt(req.query.limit || '100', 10), 1000);
+    const from = req.query.from ? new Date(req.query.from) : null;
+    const to = req.query.to ? new Date(req.query.to) : null;
 
     const filter = {};
     if (deviceId) filter.deviceId = deviceId;
@@ -935,7 +992,7 @@ app.get('/api/db/events', async (req, res) => {
     if (from || to) {
       filter.ts = {};
       if (from) filter.ts.$gte = from;
-      if (to)   filter.ts.$lte = to;
+      if (to) filter.ts.$lte = to;
     }
 
     const events = await db.collection('events')
@@ -951,19 +1008,16 @@ app.get('/api/db/events', async (req, res) => {
   }
 });
 
-/**
- * GET /api/db/stats/hourly?deviceId=X&days=7
- * Returns hourly aggregated stats for trend charts (up to `days` days back).
- * Sorted oldest-first so charts can render left-to-right.
- */
 app.get('/api/db/stats/hourly', async (req, res) => {
   try {
-    const db       = getDb();
+    const db = getDb();
+    if (!db) {
+      return res.status(503).json({ error: 'MongoDB not connected' });
+    }
     const deviceId = req.query.deviceId;
-    const days     = Math.min(parseInt(req.query.days || '7', 10), 90);
-    const from     = new Date(Date.now() - days * 24 * 3600 * 1000);
+    const days = Math.min(parseInt(req.query.days || '7', 10), 90);
+    const from = new Date(Date.now() - days * 24 * 3600 * 1000);
 
-    // hourly_stats uses 'hour' as the date field, not 'ts'
     const filter = { hour: { $gte: from } };
     if (deviceId) filter.deviceId = deviceId;
 
@@ -979,17 +1033,15 @@ app.get('/api/db/stats/hourly', async (req, res) => {
   }
 });
 
-/**
- * GET /api/db/stats/daily?deviceId=X&days=30
- * Returns per-day summaries by aggregating hourly_stats.
- * Useful for the Sleep page "7-day quality" chart.
- */
 app.get('/api/db/stats/daily', async (req, res) => {
   try {
-    const db       = getDb();
+    const db = getDb();
+    if (!db) {
+      return res.status(503).json({ error: 'MongoDB not connected' });
+    }
     const deviceId = req.query.deviceId;
-    const days     = Math.min(parseInt(req.query.days || '30', 10), 365);
-    const from     = new Date(Date.now() - days * 24 * 3600 * 1000);
+    const days = Math.min(parseInt(req.query.days || '30', 10), 365);
+    const from = new Date(Date.now() - days * 24 * 3600 * 1000);
 
     const matchStage = { $match: { hour: { $gte: from } } };
     if (deviceId) matchStage.$match.deviceId = deviceId;
@@ -1046,13 +1098,12 @@ app.get('/api/db/stats/daily', async (req, res) => {
   }
 });
 
-/**
- * GET /api/db/health
- * Quick check: MongoDB connection status + collection counts.
- */
 app.get('/api/db/health', async (req, res) => {
   try {
     const db = getDb();
+    if (!db) {
+      return res.status(503).json({ status: 'error', message: 'MongoDB not connected' });
+    }
     const [readings, events, hourly, meta] = await Promise.all([
       db.collection('readings').estimatedDocumentCount(),
       db.collection('events').estimatedDocumentCount(),
@@ -1068,78 +1119,59 @@ app.get('/api/db/health', async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────
-// ── Server startup — connect MongoDB first, then listen ───────────
-// ─────────────────────────────────────────────────────────────────
+// ── Server startup ───────────────────────────────────────────
 const PORT = process.env.PORT || 3007;
 
 async function startServer() {
-  // 1. Connect to MongoDB (non-fatal: server keeps running if Mongo is down)
+  // 1. Connect to MongoDB (non-fatal)
   try {
     await connectMongo();
-    dataBuffer.start();     // begin 30-second batch flush timer
-    startAggregator();      // hourly stats aggregation job
+    if (dataBuffer && dataBuffer.start) {
+      dataBuffer.start();
+    }
+    if (startAggregator) {
+      startAggregator();
+    }
   } catch (err) {
-    console.error('[MongoDB] ⚠️  Could not connect — running without DB persistence:', err.message);
-    console.error('[MongoDB]    Set MONGO_URI in .env to enable persistence.');
+    console.error('[MongoDB] ⚠️ Could not connect — running without DB persistence:', err.message);
   }
 
   // 2. Start HTTP + WebSocket server
-  server.listen(PORT, '0.0.0.0', startServerCallback);
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log('\n🚀 Enhanced Greenhouse Monitor Server');
+    console.log('='.repeat(50));
+    console.log(`📡 WebSocket: ws://localhost:${PORT}`);
+    console.log(`🌐 HTTP: http://localhost:${PORT}`);
+    console.log('\n📊 API Endpoints:');
+    console.log(`   GET  /api/devices - List all devices`);
+    console.log(`   GET  /api/devices/:id - Get device details`);
+    console.log(`   GET  /api/devices/:id/sound/analysis - Get sound analysis`);
+    console.log(`   POST /api/devices/:id/calibrate - Calibrate sound sensor`);
+    console.log(`   POST /api/devices/:id/auto-tune - Auto-tune sensitivity`);
+    console.log(`   POST /api/devices/:id/command - Send command`);
+    console.log(`   GET  /api/db/readings - MongoDB readings`);
+    console.log(`   GET  /api/db/events - MongoDB events`);
+    console.log(`   GET  /api/db/stats/hourly - Hourly summaries`);
+    console.log(`   GET  /api/db/stats/daily - Daily summaries`);
+    console.log('='.repeat(50));
+    console.log('\n✅ Server ready! Waiting for ESP32 connections...');
+  });
 }
 
-function startServerCallback() {
-  console.log('\n🚀 Enhanced Greenhouse Monitor Server');
-  console.log('='.repeat(50));
-  console.log(`📡 WebSocket: ws://localhost:${PORT}`);
-  console.log(`🌐 HTTP: http://localhost:${PORT}`);
-  console.log('\n📊 Enhanced API Endpoints:');
-  console.log(`   GET  /api/devices - List all devices`);
-  console.log(`   GET  /api/devices/:id - Get device details`);
-  console.log(`   GET  /api/devices/:id/sound/analysis - Get sound analysis`);
-  console.log(`   GET  /api/devices/:id/history - Get device history`);
-  console.log(`   POST /api/devices/:id/calibrate - Calibrate sound sensor`);
-  console.log(`   POST /api/devices/:id/auto-tune - Auto-tune sensitivity`);
-  console.log(`   POST /api/devices/:id/command - Send command`);
-  console.log(`   POST /api/broadcast - Broadcast to all devices`);
-  console.log(`   GET  /api/stats - Server statistics`);
-  console.log('='.repeat(50));
-  console.log('\n🔧 Sound Tuning Guide:');
-  console.log('   1. Calibrate first: POST /api/devices/:id/calibrate');
-  console.log('   2. Auto-tune: POST /api/devices/:id/auto-tune');
-  console.log('   3. Manual sensitivity: POST /api/devices/:id/command {"command":"set_sensitivity","value":5}');
-  console.log('   4. Monitor sound levels in real-time');
-  console.log('   5. Adjust thresholds in CONFIG.soundThresholds as needed');
-  console.log('\n💡 ESP32 Data Format:');
-  console.log(`   - sound: ${CONFIG.soundThresholds.QUIET}-1023 (level)`);
-  console.log(`   - sound_raw: 0-4095 (ADC value)`);
-  console.log(`   - sound_diff: difference from baseline`);
-  console.log(`   - sound_alert: "Quiet", "Light Activity", "Restless", "CRYING DETECTED! ⚠️"`);
-  console.log('\n🎯 Threshold Guide (ESP32 scale 0-1023):');
-  console.log(`   QUIET: < ${CONFIG.soundThresholds.QUIET} - Normal ambient`);
-  console.log(`   LIGHT_ACTIVITY: ${CONFIG.soundThresholds.QUIET}-${CONFIG.soundThresholds.LIGHT_ACTIVITY} - Soft sounds`);
-  console.log(`   RESTLESS: ${CONFIG.soundThresholds.LIGHT_ACTIVITY}-${CONFIG.soundThresholds.RESTLESS} - Moderate activity`);
-  console.log(`   CRYING: > ${CONFIG.soundThresholds.RESTLESS} - Loud/urgent sounds`);
-  console.log('\n🗄️  MongoDB API:');
-  console.log(`   GET  /api/db/readings        - Batched 30s reading docs (TTL 7d)`);
-  console.log(`   GET  /api/db/events          - State-change events (permanent)`);
-  console.log(`   GET  /api/db/stats/hourly    - Hourly summaries`);
-  console.log(`   GET  /api/db/stats/daily     - Daily summaries`);
-  console.log(`   GET  /api/db/health          - DB connection health`);
-  console.log('='.repeat(50));
-}
-
-// ── Graceful shutdown ────────────────────────────────────────────
+// Graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('[Server] SIGTERM — draining buffer and shutting down…');
-  await dataBuffer.drain();
+  console.log('[Server] SIGTERM — shutting down…');
+  if (dataBuffer && dataBuffer.drain) {
+    await dataBuffer.drain();
+  }
   process.exit(0);
 });
 process.on('SIGINT', async () => {
-  console.log('[Server] SIGINT — draining buffer and shutting down…');
-  await dataBuffer.drain();
+  console.log('[Server] SIGINT — shutting down…');
+  if (dataBuffer && dataBuffer.drain) {
+    await dataBuffer.drain();
+  }
   process.exit(0);
 });
 
-// ── Boot ─────────────────────────────────────────────────────────
 startServer();

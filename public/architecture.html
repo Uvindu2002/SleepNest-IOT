@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SleepNest – System Architecture</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #F0EBE3;
+      color: #3D2E5E;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* ── Decorative blobs ── */
+    .blob-orange {
+      position: fixed;
+      top: -30px; right: -30px;
+      width: 220px; height: 200px;
+      background: #F9C97A;
+      border-radius: 0 0 0 80%;
+      z-index: 0;
+    }
+    .blob-pink {
+      position: fixed;
+      bottom: -10px; left: 30px;
+      width: 80px; height: 100px;
+      z-index: 0;
+    }
+    .sparkle {
+      position: fixed;
+      z-index: 0;
+      color: #5CBFBA;
+      font-size: 28px;
+      line-height: 1;
+    }
+    .sparkle-1 { top: 60px;  left: 50px;  font-size: 20px; }
+    .sparkle-2 { top: 90px;  left: 80px;  font-size: 14px; }
+    .sparkle-3 { top: 140px; left: 35px;  font-size: 16px; }
+    .dot-group  { position: fixed; top: 160px; right: 80px; z-index: 0; }
+
+    /* ── Page wrapper ── */
+    .page-wrapper {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 1120px;
+      border: 2.5px solid #8B6CC8;
+      border-radius: 20px;
+      background: #F5F0EB;
+      padding: 32px 28px 28px;
+      box-shadow: 0 4px 32px rgba(139,108,200,0.10);
+    }
+
+    .page-title {
+      text-align: center;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #7B5CC8;
+      margin-bottom: 24px;
+      letter-spacing: -0.3px;
+    }
+
+    /* ── Diagram wrapper ── */
+    .diagram-wrapper {
+      width: 100%;
+      background: #E8F4F3;
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    svg {
+      width: 100%;
+      height: auto;
+      display: block;
+      overflow: visible;
+    }
+
+    footer {
+      margin-top: 16px;
+      font-size: 0.72rem;
+      color: #9B8EBE;
+      text-align: center;
+      letter-spacing: 0.3px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Decorative elements -->
+<div class="blob-orange"></div>
+
+<!-- Pink plant SVG -->
+<svg class="blob-pink" viewBox="0 0 80 100" xmlns="http://www.w3.org/2000/svg">
+  <ellipse cx="40" cy="90" rx="8" ry="12" fill="#E88080"/>
+  <path d="M40 80 Q20 55 28 35 Q35 20 40 30 Q45 20 52 35 Q60 55 40 80Z" fill="#E88080"/>
+  <path d="M40 78 Q15 58 22 38 Q30 22 40 32" fill="#D46060" opacity="0.5"/>
+</svg>
+
+<!-- Sparkles -->
+<div class="sparkle sparkle-1">✦</div>
+<div class="sparkle sparkle-2">✦</div>
+<div class="sparkle sparkle-3">✧</div>
+
+<!-- Teal dots -->
+<svg class="dot-group" width="40" height="60" viewBox="0 0 40 60">
+  <circle cx="30" cy="10" r="6" fill="#3DBDB8"/>
+  <circle cx="20" cy="28" r="4" fill="#3DBDB8"/>
+  <circle cx="32" cy="44" r="5" fill="#3DBDB8"/>
+</svg>
+
+<div class="page-wrapper">
+  <div class="page-title">System Overview Diagram</div>
+
+  <div class="diagram-wrapper">
+  <svg viewBox="0 0 1050 640" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arr-teal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#3DBDB8"/>
+      </marker>
+      <marker id="arr-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#8B6CC8"/>
+      </marker>
+      <marker id="arr-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#E8A857"/>
+      </marker>
+      <marker id="arr-pink" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+        <polygon points="0 0, 10 3.5, 0 7" fill="#E88080"/>
+      </marker>
+
+      <!-- Pastel gradients per layer -->
+      <linearGradient id="grad-hw" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#C8EBE8"/>
+        <stop offset="100%" stop-color="#B0DDD9"/>
+      </linearGradient>
+      <linearGradient id="grad-comm" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#D4E8F5"/>
+        <stop offset="100%" stop-color="#BDD8EE"/>
+      </linearGradient>
+      <linearGradient id="grad-be" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#E0D4F5"/>
+        <stop offset="100%" stop-color="#CDBFEE"/>
+      </linearGradient>
+      <linearGradient id="grad-db" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#FAE8CC"/>
+        <stop offset="100%" stop-color="#F5D8B0"/>
+      </linearGradient>
+      <linearGradient id="grad-fe" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#FAD4D4"/>
+        <stop offset="100%" stop-color="#F5BFBF"/>
+      </linearGradient>
+
+      <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+        <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#00000022"/>
+      </filter>
+    </defs>
+
+    <!-- ═══ COLUMN LABELS ═══ -->
+    <text x="120" y="18" text-anchor="middle" fill="#2E9B95" font-size="10" font-weight="700" letter-spacing="1">HARDWARE LAYER</text>
+    <text x="120" y="30" text-anchor="middle" fill="#2E9B95" font-size="8" opacity="0.7">Baby Room</text>
+
+    <text x="374" y="18" text-anchor="middle" fill="#3A7EC8" font-size="10" font-weight="700" letter-spacing="1">COMMUNICATION</text>
+    <text x="374" y="30" text-anchor="middle" fill="#3A7EC8" font-size="8" opacity="0.7">WiFi + WebSocket + REST</text>
+
+    <text x="606" y="18" text-anchor="middle" fill="#7B5CC8" font-size="10" font-weight="700" letter-spacing="1">BACKEND LAYER</text>
+    <text x="606" y="30" text-anchor="middle" fill="#7B5CC8" font-size="8" opacity="0.7">Node.js · Port 3007</text>
+
+    <text x="835" y="18" text-anchor="middle" fill="#C88A30" font-size="10" font-weight="700" letter-spacing="1">DATABASE</text>
+    <text x="835" y="30" text-anchor="middle" fill="#C88A30" font-size="8" opacity="0.7">MongoDB · Port 27017</text>
+
+    <text x="983" y="18" text-anchor="middle" fill="#C85050" font-size="10" font-weight="700" letter-spacing="1">FRONTEND</text>
+    <text x="983" y="30" text-anchor="middle" fill="#C85050" font-size="8" opacity="0.7">React · Port 5173</text>
+
+    <!-- ═══ LAYER 1 – HARDWARE ═══ -->
+    <rect x="10" y="38" width="220" height="588" rx="12" fill="url(#grad-hw)" stroke="#3DBDB8" stroke-width="1.8"/>
+
+    <!-- ESP32 chip -->
+    <rect x="35" y="54" width="170" height="52" rx="8" fill="#fff" stroke="#3DBDB8" stroke-width="2" filter="url(#shadow)"/>
+    <text x="120" y="72" text-anchor="middle" font-size="16">🔌</text>
+    <text x="120" y="88" text-anchor="middle" fill="#2E9B95" font-size="11" font-weight="700">ESP32</text>
+    <text x="120" y="100" text-anchor="middle" fill="#6B9E9B" font-size="8">Microcontroller</text>
+
+    <!-- Sensor cards -->
+    <!-- DHT11 -->
+    <rect x="25" y="122" width="200" height="56" rx="8" fill="#fff" stroke="#3DBDB8" stroke-width="1" stroke-opacity="0.8" filter="url(#shadow)"/>
+    <text x="44" y="148" font-size="18">🌡️</text>
+    <text x="72" y="144" fill="#2C3E50" font-size="10" font-weight="600">DHT11</text>
+    <text x="72" y="156" fill="#7F8C8D" font-size="8">Temperature + Humidity</text>
+    <rect x="72" y="162" width="54" height="11" rx="3" fill="#C8EBE8"/>
+    <text x="99" y="170.5" text-anchor="middle" fill="#2E9B95" font-size="7.5">Digital · GPIO 4</text>
+
+    <!-- PIR -->
+    <rect x="25" y="186" width="200" height="56" rx="8" fill="#fff" stroke="#3DBDB8" stroke-width="1" stroke-opacity="0.8" filter="url(#shadow)"/>
+    <text x="44" y="212" font-size="18">👁️</text>
+    <text x="72" y="208" fill="#2C3E50" font-size="10" font-weight="600">PIR Motion Sensor</text>
+    <text x="72" y="220" fill="#7F8C8D" font-size="8">Passive Infrared</text>
+    <rect x="72" y="226" width="54" height="11" rx="3" fill="#C8EBE8"/>
+    <text x="99" y="234.5" text-anchor="middle" fill="#2E9B95" font-size="7.5">Digital · GPIO 5</text>
+
+    <!-- LDR -->
+    <rect x="25" y="250" width="200" height="56" rx="8" fill="#fff" stroke="#3DBDB8" stroke-width="1" stroke-opacity="0.8" filter="url(#shadow)"/>
+    <text x="44" y="276" font-size="18">💡</text>
+    <text x="72" y="272" fill="#2C3E50" font-size="10" font-weight="600">LDR Light Sensor</text>
+    <text x="72" y="284" fill="#7F8C8D" font-size="8">Photoresistor (Analog)</text>
+    <rect x="72" y="290" width="70" height="11" rx="3" fill="#C8EBE8"/>
+    <text x="107" y="298.5" text-anchor="middle" fill="#2E9B95" font-size="7.5">Analog · GPIO 32 (ADC)</text>
+
+    <!-- Sound -->
+    <rect x="25" y="314" width="200" height="56" rx="8" fill="#fff" stroke="#3DBDB8" stroke-width="1" stroke-opacity="0.8" filter="url(#shadow)"/>
+    <text x="44" y="340" font-size="18">🎤</text>
+    <text x="72" y="336" fill="#2C3E50" font-size="10" font-weight="600">Microphone KY-038</text>
+    <text x="72" y="348" fill="#7F8C8D" font-size="8">Sound / Decibel</text>
+    <rect x="72" y="354" width="70" height="11" rx="3" fill="#C8EBE8"/>
+    <text x="107" y="362.5" text-anchor="middle" fill="#2E9B95" font-size="7.5">Analog · GPIO 36 (ADC)</text>
+
+    <!-- LED -->
+    <rect x="25" y="378" width="200" height="46" rx="8" fill="#fff" stroke="#3DBDB8" stroke-width="1" stroke-opacity="0.8" filter="url(#shadow)"/>
+    <text x="44" y="401" font-size="16">🔴</text>
+    <text x="72" y="399" fill="#2C3E50" font-size="10" font-weight="600">LED Indicator</text>
+    <text x="72" y="411" fill="#7F8C8D" font-size="8">Visual Status · GPIO 2</text>
+
+    <!-- Sampling + Power -->
+    <rect x="25" y="434" width="200" height="34" rx="6" fill="#B0DDD9" stroke="#3DBDB8" stroke-width="0.8"/>
+    <text x="120" y="448" text-anchor="middle" fill="#2C3E50" font-size="8" font-weight="600">📊 Continuous real-time polling</text>
+    <text x="120" y="460" text-anchor="middle" fill="#2E9B95" font-size="7.5">⚡ USB 5V / 3.3V onboard reg.</text>
+
+    <!-- Connection lines to ESP32 -->
+    <line x1="120" y1="106" x2="120" y2="122" stroke="#3DBDB8" stroke-width="1" stroke-dasharray="3,3" opacity="0.6"/>
+    <circle cx="120" cy="122" r="3" fill="#3DBDB8" opacity="0.8"/>
+    <circle cx="120" cy="186" r="3" fill="#3DBDB8" opacity="0.8"/>
+    <circle cx="120" cy="250" r="3" fill="#3DBDB8" opacity="0.8"/>
+    <circle cx="120" cy="314" r="3" fill="#3DBDB8" opacity="0.8"/>
+    <circle cx="120" cy="378" r="3" fill="#3DBDB8" opacity="0.8"/>
+
+    <!-- ═══ LAYER 2 – COMMUNICATION ═══ -->
+    <rect x="246" y="38" width="248" height="588" rx="12" fill="url(#grad-comm)" stroke="#3A7EC8" stroke-width="1.8"/>
+
+    <!-- WiFi -->
+    <rect x="264" y="54" width="212" height="72" rx="8" fill="#fff" stroke="#3A7EC8" stroke-width="1.5" filter="url(#shadow)"/>
+    <text x="340" y="82" text-anchor="middle" font-size="26">📡</text>
+    <text x="410" y="78" fill="#2C3E50" font-size="11" font-weight="700">WiFi 2.4 GHz</text>
+    <text x="410" y="91" fill="#7F8C8D" font-size="8">IEEE 802.11 b/g/n</text>
+    <text x="410" y="103" fill="#7F8C8D" font-size="8">ESP32 built-in radio</text>
+    <text x="410" y="118" fill="#7F8C8D" font-size="8">Local Area Network</text>
+
+    <!-- WebSocket -->
+    <rect x="264" y="140" width="212" height="110" rx="8" fill="#fff" stroke="#3A7EC8" stroke-width="1.5" filter="url(#shadow)"/>
+    <text x="280" y="162" font-size="20">⚡</text>
+    <text x="308" y="160" fill="#2C3E50" font-size="11" font-weight="700">WebSocket</text>
+    <text x="308" y="173" fill="#7F8C8D" font-size="8">Real-time · Bidirectional</text>
+    <rect x="275" y="182" width="88" height="13" rx="4" fill="#D4E8F5" stroke="#3A7EC8" stroke-width="0.8"/>
+    <text x="319" y="191.5" text-anchor="middle" fill="#3A7EC8" font-size="8">⬆ Sensor → Server</text>
+    <rect x="372" y="182" width="95" height="13" rx="4" fill="#D4E8F5" stroke="#3A7EC8" stroke-width="0.8"/>
+    <text x="419.5" y="191.5" text-anchor="middle" fill="#3A7EC8" font-size="8">⬇ Server → Browser</text>
+    <rect x="275" y="200" width="188" height="13" rx="4" fill="#D4E8F5" stroke="#3A7EC8" stroke-width="0.8"/>
+    <text x="369" y="209.5" text-anchor="middle" fill="#3A7EC8" font-size="8">Persistent TCP · ws://</text>
+    <rect x="275" y="218" width="188" height="13" rx="4" fill="#D4E8F5" stroke="#3A7EC8" stroke-width="0.8"/>
+    <text x="369" y="227.5" text-anchor="middle" fill="#3A7EC8" font-size="8">Low latency · JSON payload</text>
+
+    <!-- REST API -->
+    <rect x="264" y="264" width="212" height="110" rx="8" fill="#fff" stroke="#3A7EC8" stroke-width="1.5" filter="url(#shadow)"/>
+    <text x="280" y="286" font-size="20">🌐</text>
+    <text x="308" y="284" fill="#2C3E50" font-size="11" font-weight="700">REST API</text>
+    <text x="308" y="297" fill="#7F8C8D" font-size="8">HTTP · Request / Response</text>
+    <rect x="275" y="306" width="188" height="13" rx="4" fill="#D4E8F5" stroke="#3A7EC8" stroke-width="0.8"/>
+    <text x="369" y="315.5" text-anchor="middle" fill="#3A7EC8" font-size="8">GET /api/readings → JSON array</text>
+    <rect x="275" y="324" width="188" height="13" rx="4" fill="#D4E8F5" stroke="#3A7EC8" stroke-width="0.8"/>
+    <text x="369" y="333.5" text-anchor="middle" fill="#3A7EC8" font-size="8">GET /api/alerts → alert list</text>
+    <rect x="275" y="342" width="188" height="13" rx="4" fill="#D4E8F5" stroke="#3A7EC8" stroke-width="0.8"/>
+    <text x="369" y="351.5" text-anchor="middle" fill="#3A7EC8" font-size="8">GET /api/devices → device info</text>
+    <text x="369" y="368" text-anchor="middle" fill="#7F8C8D" font-size="8">Framework: Express.js</text>
+
+    <!-- Protocol summary -->
+    <rect x="264" y="388" width="212" height="78" rx="8" fill="#BDD8EE" stroke="#3A7EC8" stroke-width="0.8"/>
+    <text x="370" y="404" text-anchor="middle" fill="#2C3E50" font-size="9" font-weight="600">Protocol Summary</text>
+    <text x="276" y="418" fill="#3A7EC8" font-size="8">• Sensor data  →  WebSocket (push)</text>
+    <text x="276" y="430" fill="#3A7EC8" font-size="8">• History data  →  REST GET (pull)</text>
+    <text x="276" y="442" fill="#3A7EC8" font-size="8">• Alerts        →  WebSocket broadcast</text>
+    <text x="276" y="454" fill="#3A7EC8" font-size="8">• Config        →  REST GET / POST</text>
+
+    <!-- ═══ LAYER 3 – BACKEND ═══ -->
+    <rect x="510" y="38" width="228" height="588" rx="12" fill="url(#grad-be)" stroke="#8B6CC8" stroke-width="1.8"/>
+
+    <!-- Express -->
+    <rect x="526" y="54" width="196" height="52" rx="8" fill="#fff" stroke="#8B6CC8" stroke-width="1.8" filter="url(#shadow)"/>
+    <text x="550" y="74" font-size="20">🖥️</text>
+    <text x="578" y="72" fill="#2C3E50" font-size="11" font-weight="700">Node.js + Express</text>
+    <text x="578" y="85" fill="#7F8C8D" font-size="8">HTTP Server · Port 3007</text>
+    <text x="578" y="97" fill="#7F8C8D" font-size="8">Entry point: server.js</text>
+
+    <!-- WebSocket Server -->
+    <rect x="526" y="118" width="196" height="52" rx="8" fill="#fff" stroke="#8B6CC8" stroke-width="1.2" filter="url(#shadow)"/>
+    <text x="544" y="140" font-size="18">🔄</text>
+    <text x="570" y="138" fill="#2C3E50" font-size="10" font-weight="700">WebSocket Server</text>
+    <text x="570" y="150" fill="#7F8C8D" font-size="8">ws library · attached to HTTP</text>
+    <text x="570" y="162" fill="#7F8C8D" font-size="8">Broadcasts to all clients</text>
+
+    <!-- Data Processor -->
+    <rect x="526" y="182" width="196" height="96" rx="8" fill="#fff" stroke="#8B6CC8" stroke-width="1.2" filter="url(#shadow)"/>
+    <text x="544" y="202" font-size="18">⚙️</text>
+    <text x="570" y="200" fill="#2C3E50" font-size="10" font-weight="700">Data Processor</text>
+    <text x="570" y="212" fill="#7F8C8D" font-size="8">Processing pipeline</text>
+    <rect x="538" y="220" width="172" height="13" rx="3" fill="#E0D4F5"/>
+    <text x="624" y="229.5" text-anchor="middle" fill="#7B5CC8" font-size="8">calcComfort(temp, humidity)</text>
+    <rect x="538" y="238" width="172" height="13" rx="3" fill="#E0D4F5"/>
+    <text x="624" y="247.5" text-anchor="middle" fill="#7B5CC8" font-size="8">soundToDb(analogValue)</text>
+    <rect x="538" y="256" width="172" height="13" rx="3" fill="#E0D4F5"/>
+    <text x="624" y="265.5" text-anchor="middle" fill="#7B5CC8" font-size="8">detectAlerts(readings)</text>
+
+    <!-- DataBuffer -->
+    <rect x="526" y="290" width="196" height="68" rx="8" fill="#fff" stroke="#8B6CC8" stroke-width="1.2" filter="url(#shadow)"/>
+    <text x="544" y="312" font-size="18">🗂️</text>
+    <text x="570" y="310" fill="#2C3E50" font-size="10" font-weight="700">DataBuffer</text>
+    <text x="570" y="322" fill="#7F8C8D" font-size="8">In-memory queue</text>
+    <rect x="538" y="330" width="172" height="13" rx="3" fill="#E0D4F5"/>
+    <text x="624" y="339.5" text-anchor="middle" fill="#7B5CC8" font-size="8">Batch writes every 30s</text>
+    <rect x="538" y="348" width="172" height="13" rx="3" fill="#E0D4F5"/>
+    <text x="624" y="357.5" text-anchor="middle" fill="#7B5CC8" font-size="8">Reduces DB write frequency</text>
+
+    <!-- Alert Engine -->
+    <rect x="526" y="370" width="196" height="68" rx="8" fill="#fff" stroke="#8B6CC8" stroke-width="1.2" filter="url(#shadow)"/>
+    <text x="544" y="392" font-size="18">🚨</text>
+    <text x="570" y="390" fill="#2C3E50" font-size="10" font-weight="700">Alert Engine</text>
+    <text x="570" y="402" fill="#7F8C8D" font-size="8">Threshold monitoring</text>
+    <text x="538" y="420" fill="#7F8C8D" font-size="7.5">• Temp &gt; 25°C or Humidity &gt; 60%</text>
+    <text x="538" y="432" fill="#7F8C8D" font-size="7.5">• Motion detected · Sound &gt; 65 dB</text>
+
+    <!-- Tech stack -->
+    <rect x="526" y="450" width="196" height="50" rx="8" fill="#CDBFEE" stroke="#8B6CC8" stroke-width="0.8"/>
+    <text x="624" y="466" text-anchor="middle" fill="#2C3E50" font-size="9" font-weight="600">Tech Stack</text>
+    <text x="624" y="480" text-anchor="middle" fill="#7B5CC8" font-size="8">Node.js · Express 4 · ws library</text>
+    <text x="624" y="492" text-anchor="middle" fill="#7B5CC8" font-size="8">Mongoose ODM · dotenv</text>
+
+    <!-- ═══ LAYER 4 – DATABASE ═══ -->
+    <rect x="754" y="38" width="134" height="588" rx="12" fill="url(#grad-db)" stroke="#C88A30" stroke-width="1.8"/>
+
+    <!-- MongoDB title -->
+    <rect x="768" y="54" width="106" height="52" rx="8" fill="#fff" stroke="#C88A30" stroke-width="1.8" filter="url(#shadow)"/>
+    <text x="821" y="73" text-anchor="middle" font-size="22">🍃</text>
+    <text x="821" y="92" text-anchor="middle" fill="#2C3E50" font-size="10" font-weight="700">MongoDB</text>
+    <text x="821" y="104" text-anchor="middle" fill="#7F8C8D" font-size="7.5">Port 27017</text>
+
+    <!-- Collections -->
+    <rect x="768" y="118" width="106" height="72" rx="8" fill="#fff" stroke="#C88A30" stroke-width="1" filter="url(#shadow)"/>
+    <text x="821" y="134" text-anchor="middle" fill="#C88A30" font-size="9" font-weight="600">Collections</text>
+    <rect x="776" y="140" width="90" height="13" rx="3" fill="#FAE8CC"/>
+    <text x="821" y="149.5" text-anchor="middle" fill="#C88A30" font-size="8">📋 readings</text>
+    <rect x="776" y="158" width="90" height="13" rx="3" fill="#FAE8CC"/>
+    <text x="821" y="167.5" text-anchor="middle" fill="#C88A30" font-size="8">📱 devices</text>
+    <rect x="776" y="176" width="90" height="13" rx="3" fill="#FAE8CC"/>
+    <text x="821" y="185.5" text-anchor="middle" fill="#C88A30" font-size="8">🚨 alerts</text>
+
+    <!-- readings schema -->
+    <rect x="768" y="204" width="106" height="118" rx="8" fill="#fff" stroke="#C88A30" stroke-width="1" filter="url(#shadow)"/>
+    <text x="821" y="220" text-anchor="middle" fill="#C88A30" font-size="8.5" font-weight="600">readings schema</text>
+    <text x="778" y="234" fill="#7F8C8D" font-size="7">timestamp: Date</text>
+    <text x="778" y="246" fill="#7F8C8D" font-size="7">temperature: Number</text>
+    <text x="778" y="258" fill="#7F8C8D" font-size="7">humidity: Number</text>
+    <text x="778" y="270" fill="#7F8C8D" font-size="7">motion: Boolean</text>
+    <text x="778" y="282" fill="#7F8C8D" font-size="7">light: Number</text>
+    <text x="778" y="294" fill="#7F8C8D" font-size="7">sound: Number</text>
+    <text x="778" y="306" fill="#7F8C8D" font-size="7">comfort: Number</text>
+
+    <!-- devices schema -->
+    <rect x="768" y="334" width="106" height="72" rx="8" fill="#fff" stroke="#C88A30" stroke-width="1" filter="url(#shadow)"/>
+    <text x="821" y="350" text-anchor="middle" fill="#C88A30" font-size="8.5" font-weight="600">devices schema</text>
+    <text x="778" y="364" fill="#7F8C8D" font-size="7">deviceId: String</text>
+    <text x="778" y="376" fill="#7F8C8D" font-size="7">name: String</text>
+    <text x="778" y="388" fill="#7F8C8D" font-size="7">lastSeen: Date</text>
+    <text x="778" y="400" fill="#7F8C8D" font-size="7">status: String</text>
+
+    <!-- alerts schema -->
+    <rect x="768" y="418" width="106" height="72" rx="8" fill="#fff" stroke="#C88A30" stroke-width="1" filter="url(#shadow)"/>
+    <text x="821" y="434" text-anchor="middle" fill="#C88A30" font-size="8.5" font-weight="600">alerts schema</text>
+    <text x="778" y="448" fill="#7F8C8D" font-size="7">type: String</text>
+    <text x="778" y="460" fill="#7F8C8D" font-size="7">message: String</text>
+    <text x="778" y="472" fill="#7F8C8D" font-size="7">value: Number</text>
+    <text x="778" y="484" fill="#7F8C8D" font-size="7">timestamp: Date</text>
+
+    <!-- ═══ LAYER 5 – FRONTEND ═══ -->
+    <rect x="904" y="38" width="138" height="588" rx="12" fill="url(#grad-fe)" stroke="#C85050" stroke-width="1.8"/>
+
+    <!-- React -->
+    <rect x="918" y="54" width="110" height="52" rx="8" fill="#fff" stroke="#C85050" stroke-width="1.8" filter="url(#shadow)"/>
+    <text x="973" y="73" text-anchor="middle" font-size="22">⚛️</text>
+    <text x="973" y="92" text-anchor="middle" fill="#2C3E50" font-size="10" font-weight="700">React + Vite</text>
+    <text x="973" y="104" text-anchor="middle" fill="#7F8C8D" font-size="7.5">Port 5173</text>
+
+    <!-- SensorContext -->
+    <rect x="918" y="118" width="110" height="48" rx="8" fill="#fff" stroke="#C85050" stroke-width="1.2" filter="url(#shadow)"/>
+    <text x="973" y="136" text-anchor="middle" fill="#C85050" font-size="9" font-weight="700">SensorContext</text>
+    <text x="973" y="148" text-anchor="middle" fill="#7F8C8D" font-size="7.5">Global state</text>
+    <text x="973" y="160" text-anchor="middle" fill="#7F8C8D" font-size="7">React Context API</text>
+
+    <!-- 7 Pages -->
+    <rect x="918" y="178" width="110" height="228" rx="8" fill="#fff" stroke="#C85050" stroke-width="1.2" filter="url(#shadow)"/>
+    <text x="973" y="194" text-anchor="middle" fill="#C85050" font-size="9" font-weight="700">7 Pages</text>
+    <rect x="926" y="200" width="94" height="14" rx="3" fill="#FAD4D4"/>
+    <text x="973" y="210" text-anchor="middle" fill="#C85050" font-size="7.5">🍼 BabySitter (default)</text>
+    <rect x="926" y="218" width="94" height="14" rx="3" fill="#FDE8E8"/>
+    <text x="973" y="228" text-anchor="middle" fill="#2C3E50" font-size="7.5">📊 Overview</text>
+    <rect x="926" y="236" width="94" height="14" rx="3" fill="#FDE8E8"/>
+    <text x="973" y="246" text-anchor="middle" fill="#2C3E50" font-size="7.5">📡 Monitoring</text>
+    <rect x="926" y="254" width="94" height="14" rx="3" fill="#FDE8E8"/>
+    <text x="973" y="264" text-anchor="middle" fill="#2C3E50" font-size="7.5">😴 Sleep</text>
+    <rect x="926" y="272" width="94" height="14" rx="3" fill="#FDE8E8"/>
+    <text x="973" y="282" text-anchor="middle" fill="#2C3E50" font-size="7.5">🚨 Alerts</text>
+    <rect x="926" y="290" width="94" height="14" rx="3" fill="#FDE8E8"/>
+    <text x="973" y="300" text-anchor="middle" fill="#2C3E50" font-size="7.5">📅 History</text>
+    <rect x="926" y="308" width="94" height="14" rx="3" fill="#FDE8E8"/>
+    <text x="973" y="318" text-anchor="middle" fill="#2C3E50" font-size="7.5">⚙️ Settings</text>
+
+    <!-- Libraries -->
+    <text x="973" y="346" text-anchor="middle" fill="#7F8C8D" font-size="8" font-weight="600">Libraries</text>
+    <rect x="926" y="352" width="94" height="13" rx="3" fill="#FDE8E8" stroke="#C85050" stroke-width="0.5"/>
+    <text x="973" y="361.5" text-anchor="middle" fill="#C85050" font-size="7.5">📈 Chart.js</text>
+    <rect x="926" y="370" width="94" height="13" rx="3" fill="#FDE8E8" stroke="#C85050" stroke-width="0.5"/>
+    <text x="973" y="379.5" text-anchor="middle" fill="#C85050" font-size="7.5">🎨 Tailwind CSS</text>
+    <rect x="926" y="388" width="94" height="13" rx="3" fill="#FDE8E8" stroke="#C85050" stroke-width="0.5"/>
+    <text x="973" y="397.5" text-anchor="middle" fill="#C85050" font-size="7.5">🔌 useWebSocket</text>
+
+    <!-- Responsive note -->
+    <rect x="918" y="420" width="110" height="36" rx="6" fill="#F5BFBF" stroke="#C85050" stroke-width="0.8"/>
+    <text x="973" y="436" text-anchor="middle" fill="#2C3E50" font-size="7.5">Responsive UI</text>
+    <text x="973" y="448" text-anchor="middle" fill="#C85050" font-size="7.5">Mobile friendly</text>
+
+    <!-- ═══ DATA FLOW ARROWS ═══ -->
+
+    <!-- ① Hardware → Comm (sensor data via WiFi) -->
+    <path d="M230 170 C238 170 246 170 246 170" stroke="#3DBDB8" stroke-width="2" fill="none" marker-end="url(#arr-teal)"/>
+    <path d="M230 300 C238 300 246 300 246 300" stroke="#3DBDB8" stroke-width="2" fill="none" marker-end="url(#arr-teal)" stroke-dasharray="4,3"/>
+
+    <!-- ② Comm WS → Backend WS Server -->
+    <path d="M494 195 C502 195 510 145 510 145" stroke="#3A7EC8" stroke-width="2" fill="none" marker-end="url(#arr-purple)" stroke-dasharray="5,3"/>
+    <text x="498" y="188" text-anchor="middle" fill="#3A7EC8" font-size="7" opacity="0.9">① sensor data</text>
+
+    <!-- ③ Backend → MongoDB (batch write) -->
+    <path d="M738 340 C746 340 754 340 754 340" stroke="#C88A30" stroke-width="2.5" fill="none" marker-end="url(#arr-orange)"/>
+    <text x="746" y="334" text-anchor="middle" fill="#C88A30" font-size="7">② 30s batch</text>
+
+    <!-- ④ Backend WS → Frontend SensorContext (broadcast) -->
+    <path d="M738 145 C800 145 860 145 880 145 C892 145 904 145 904 145" stroke="#8B6CC8" stroke-width="2" fill="none" marker-end="url(#arr-purple)" stroke-dasharray="5,3"/>
+    <text x="821" y="139" text-anchor="middle" fill="#8B6CC8" font-size="7">③ WS broadcast</text>
+
+    <!-- ⑤ Frontend REST → Comm REST → Backend (round trip) -->
+    <path d="M904 300 C890 300 800 300 754 300" stroke="#C85050" stroke-width="1.5" fill="none" marker-end="url(#arr-pink)" stroke-dasharray="4,3"/>
+    <text x="829" y="294" text-anchor="middle" fill="#C85050" font-size="7">④ REST GET</text>
+    <path d="M494 310 C502 310 510 100 510 100" stroke="#C85050" stroke-width="1.5" fill="none" marker-end="url(#arr-pink)" stroke-dasharray="4,3"/>
+
+  </svg>
+  </div>
+
+  <footer>SleepNest IoT Baby Monitoring System &middot; Architecture v1.0 &middot; 2026</footer>
+</div>
+
+</body>
+</html>
