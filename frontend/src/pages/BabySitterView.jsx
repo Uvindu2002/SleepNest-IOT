@@ -126,7 +126,7 @@ function LiveClock() {
 
 /* ── Page ───────────────────────────────────────────────────────── */
 export default function BabySitterView() {
-  const { comfort, statusMsg, temp, humidity, soundLevel, soundEvent, soundLabel, motion, db, light } = useSensor()
+  const { comfort, statusMsg, temp, humidity, soundLevel, soundEvent, soundLabel, mlConfidence, mlSource, motion, db, light } = useSensor()
 
   const theme = getTheme(comfort, soundEvent, motion)
   const alert = getAlert(soundEvent, motion, comfort)
@@ -223,9 +223,14 @@ export default function BabySitterView() {
               emoji="🔊"
               value={`${db} dB`}
               label={soundLabel.text}
-              sub={db < 40 ? '🔕 Very quiet' : db < 60 ? '🔉 Moderate' : '📢 Loud'}
+              sub={
+                soundEvent === 'CRYING'         ? '🚨 Crying Detected!'  :
+                soundEvent === 'RESTLESS'        ? '😟 Restless'          :
+                soundEvent === 'LIGHT_ACTIVITY'  ? '🌙 Light Activity'    :
+                                                   '🔕 Quiet'
+              }
               gradFrom="from-blue-50" gradTo="to-indigo-50 dark:from-[#10141E] dark:to-[#10141E]"
-              valColor="#5A52E0"
+              valColor={soundEvent === 'CRYING' ? '#EF4444' : soundEvent === 'RESTLESS' ? '#F59E0B' : '#5A52E0'}
             />
             <MetricCard
               emoji="🚶"
@@ -276,7 +281,14 @@ export default function BabySitterView() {
             <span className="text-2xl leading-none">{soundLabel.icon}</span>
             <div>
               <div className={`text-sm font-bold ${soundLabel.color}`}>{soundLabel.text}</div>
-              <div className="text-xs text-gray-400">{db} dB · level {soundLevel}</div>
+              <div className="text-xs text-gray-400">
+                {db} dB · level {soundLevel}
+                {mlConfidence !== null && (
+                  <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300">
+                    ML {mlConfidence}%
+                  </span>
+                )}
+              </div>
             </div>
             <div className="ml-auto flex items-center gap-1.5">
               <span className={`w-2 h-2 rounded-full ${alert.dot} animate-pulse`} />
@@ -351,14 +363,14 @@ export default function BabySitterView() {
             <span className="text-xl">🔊</span>
             <div>
               <div className="text-xs font-bold text-gray-700 dark:text-gray-200">Sound Level</div>
-              <div className="text-[10px] text-gray-400">Ideal: Below 50 dB</div>
+              <div className="text-[10px] text-gray-400">ML Classification · {db} dB</div>
             </div>
           </div>
           {[
-            { label: 'Silent 😴',   range: 'Below 35 dB', color: '#3B9E72', active: db < 35 },
-            { label: 'Quiet ✅',    range: '35 – 50 dB',  color: '#0EA5E9', active: db >= 35 && db < 50 },
-            { label: 'Moderate 🔉', range: '50 – 65 dB',  color: '#F59E0B', active: db >= 50 && db < 65 },
-            { label: 'Loud ⚠️',     range: 'Above 65 dB', color: '#EF4444', active: db >= 65 },
+            { label: 'Silent 😴',   range: 'Quiet',          color: '#3B9E72', active: soundEvent === 'QUIET' },
+            { label: 'Quiet ✅',    range: 'Light Activity',  color: '#0EA5E9', active: soundEvent === 'LIGHT_ACTIVITY' },
+            { label: 'Moderate 🔉', range: 'Restless',        color: '#F59E0B', active: soundEvent === 'RESTLESS' },
+            { label: 'Loud ⚠️',     range: 'Crying',          color: '#EF4444', active: soundEvent === 'CRYING' },
           ].map(({ label, range, color, active }) => (
             <div key={label} className={`flex items-center justify-between px-3 py-1.5 rounded-lg mb-1.5 transition-all ${active ? 'shadow-sm' : 'opacity-40'}`}
               style={active ? { backgroundColor: color + '18', border: `1px solid ${color}55` } : { border: '1px solid transparent' }}>

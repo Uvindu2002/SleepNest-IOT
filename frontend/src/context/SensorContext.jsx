@@ -118,6 +118,8 @@ export function SensorProvider({ children }) {
   const humidity       = raw.humidity    ?? null
   const soundLevel     = raw.sound_level ?? 0
   const soundEvent     = raw.sound_event || 'QUIET'
+  const mlConfidence   = raw.ml_confidence ?? null
+  const mlSource       = raw.ml_source    ?? 'threshold'
   const motion         = raw.motion
   const light          = raw.light       ?? 0
   const motionDurationMs = motion === 1 ? (raw.motion_duration ?? 0) : 0
@@ -133,7 +135,7 @@ export function SensorProvider({ children }) {
 
   const value = {
     device, connected, raw,
-    temp, humidity, soundLevel, soundEvent, motion, light, db,
+    temp, humidity, soundLevel, soundEvent, mlConfidence, mlSource, motion, light, db,
     comfort, statusMsg, soundLabel,
     motionDurationMs, motionThreshold, setMotionThreshold, motionExceeded, motionPenalty,
     tempHistory, noiseHistory, motionHistory, timeline, alertLog, soundDist,

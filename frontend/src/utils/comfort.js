@@ -34,10 +34,11 @@ export function soundToDb(level) {
 
 export function soundEventLabel(event) {
   switch (event) {
-    case 'CRYING':         return { icon: '😭', text: 'Crying Detected!', color: 'text-red-500' }
+    case 'CRYING':         return { icon: '😭', text: 'Crying Detected!', color: 'text-red-500'    }
     case 'RESTLESS':       return { icon: '😟', text: 'Restless',          color: 'text-yellow-500' }
-    case 'LIGHT_ACTIVITY': return { icon: '🌙', text: 'Light Activity',    color: 'text-teal-500' }
-    default:               return { icon: '🔕', text: 'Very Low',          color: 'text-gray-400' }
+    case 'LIGHT_ACTIVITY': return { icon: '🌙', text: 'Light Activity',    color: 'text-teal-500'   }
+    case 'QUIET':          return { icon: '🔕', text: 'Quiet',             color: 'text-gray-400'   }
+    default:               return { icon: '🔕', text: 'Quiet',             color: 'text-gray-400'   }
   }
 }
 
