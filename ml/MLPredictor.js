@@ -20,7 +20,8 @@ const META_PATH  = path.join(__dirname, '..', 'model', 'model_meta.json');
 const WINDOW_SIZE = 15;   // matches sampleCount used during training
 
 // Threshold fallback — calibrated for INMP441 ambient noise floor ~50-80
-const THRESHOLDS = { QUIET: 150, LIGHT_ACTIVITY: 350, RESTLESS: 600, CRYING: 700 };
+// These can be updated at runtime via setThresholds()
+let THRESHOLDS = { QUIET: 100, LIGHT_ACTIVITY: 250, RESTLESS: 450, CRYING: 600 };
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let session  = null;   // ort.InferenceSession
@@ -197,4 +198,10 @@ function status() {
   };
 }
 
-module.exports = { predict, resetWindow, status };
+/** Update thresholds at runtime (called from settings API) */
+function setThresholds(t) {
+  THRESHOLDS = { ...THRESHOLDS, ...t };
+  console.log('[ML] Thresholds updated:', THRESHOLDS);
+}
+
+module.exports = { predict, resetWindow, status, setThresholds };

@@ -33,10 +33,10 @@ const CONFIG = {
   alertCooldown: 5000, // ms between same type alerts
   motionCooldown: 2000, // ms between motion alerts
   soundThresholds: {
-    QUIET: 150,
-    LIGHT_ACTIVITY: 350,
-    RESTLESS: 600,
-    CRYING: 700
+    QUIET: 100,
+    LIGHT_ACTIVITY: 250,
+    RESTLESS: 450,
+    CRYING: 600
   },
   sensitivityRange: {
     min: 1,
@@ -971,6 +971,23 @@ setInterval(() => {
 // ── ML status endpoint ────────────────────────────────────────────
 app.get('/api/ml/status', (req, res) => {
   res.json(mlPredictor.status());
+});
+
+// ── Sound threshold settings ──────────────────────────────────────
+app.get('/api/settings/thresholds', (req, res) => {
+  res.json(CONFIG.soundThresholds);
+});
+
+app.post('/api/settings/thresholds', (req, res) => {
+  const { quiet, lightActivity, restless, crying } = req.body;
+  if (quiet        != null) CONFIG.soundThresholds.QUIET          = Number(quiet);
+  if (lightActivity != null) CONFIG.soundThresholds.LIGHT_ACTIVITY = Number(lightActivity);
+  if (restless     != null) CONFIG.soundThresholds.RESTLESS       = Number(restless);
+  if (crying       != null) CONFIG.soundThresholds.CRYING         = Number(crying);
+  // Propagate to ML predictor fallback
+  mlPredictor.setThresholds(CONFIG.soundThresholds);
+  console.log('[Settings] Sound thresholds updated:', CONFIG.soundThresholds);
+  res.json({ ok: true, thresholds: CONFIG.soundThresholds });
 });
 
 // ── Database API endpoints ────────────────────────────────────────

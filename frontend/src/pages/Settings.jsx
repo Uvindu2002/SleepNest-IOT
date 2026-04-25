@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSensor } from '../context/SensorContext'
 
 function Card({ title, children }) {
@@ -36,6 +36,22 @@ export default function Settings() {
   const { device, motionThreshold, setMotionThreshold } = useSensor()
   const [sensitivity, setSensitivity] = useState(5)
   const [toast, setToast] = useState(null)
+  const [thresholds, setThresholds] = useState({
+    quiet: 100, lightActivity: 250, restless: 450, crying: 600,
+  })
+
+  // Load current thresholds from server on mount
+  useEffect(() => {
+    fetch('/api/settings/thresholds')
+      .then(r => r.json())
+      .then(t => setThresholds({
+        quiet:         t.QUIET          ?? 100,
+        lightActivity: t.LIGHT_ACTIVITY ?? 250,
+        restless:      t.RESTLESS       ?? 450,
+        crying:        t.CRYING         ?? 600,
+      }))
+      .catch(() => {})
+  }, [])
 
   const showToast = (msg, type = 'ok') => {
     setToast({ msg, type })
@@ -65,21 +81,37 @@ export default function Settings() {
 
         {/* Sound Thresholds */}
         <Card title="Sound Thresholds (ESP32 scale 0–1023)">
+          <div className="text-[10px] text-gray-400 mb-3 leading-relaxed">
+            Ambient noise floor is ~50–80. Set <span className="font-semibold">Quiet</span> above your room's idle level.
+          </div>
           {[
-            { label: '🟢 Quiet (<)', id: 'thr-quiet',    def: 6  },
-            { label: '🟡 Light Activity (<)', id: 'thr-light',   def: 20 },
-            { label: '🟠 Restless (<)', id: 'thr-restless', def: 40 },
-          ].map(({ label, id, def }) => (
-            <Row key={id} label={label}>
+            { label: '🟢 Quiet below',          key: 'quiet',         color: 'text-green-500'  },
+            { label: '🟡 Light Activity below',  key: 'lightActivity', color: 'text-yellow-500' },
+            { label: '🟠 Restless below',        key: 'restless',      color: 'text-orange-500' },
+            { label: '🔴 Crying from',           key: 'crying',        color: 'text-red-500'    },
+          ].map(({ label, key, color }) => (
+            <Row key={key} label={<span className={`text-xs font-semibold ${color}`}>{label}</span>}>
               <input
-                type="number"
-                defaultValue={def}
-                id={id}
+                type="number" min={1} max={1023}
+                value={thresholds[key]}
+                onChange={e => setThresholds(prev => ({ ...prev, [key]: Number(e.target.value) }))}
                 className="w-20 text-center text-xs py-1.5 px-2 rounded-lg border border-nest-border dark:border-[#2A2E4A] bg-nest-bg dark:bg-[#161928] text-gray-800 dark:text-gray-100 focus:outline-none focus:border-accent"
               />
             </Row>
           ))}
-          <Btn onClick={() => showToast('Thresholds saved locally (restart device to apply)')}>
+          <Btn onClick={async () => {
+            try {
+              const res = await fetch('/api/settings/thresholds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(thresholds),
+              })
+              if (!res.ok) throw new Error()
+              showToast('✅ Thresholds applied live — no restart needed')
+            } catch {
+              showToast('❌ Failed to apply thresholds', 'err')
+            }
+          }}>
             Apply Thresholds
           </Btn>
         </Card>
