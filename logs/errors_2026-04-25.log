@@ -1,0 +1,2 @@
+{"timestamp":1777125123879,"type":"errors","deviceId":"ESP32_GREENHOUSE_01","data":{"error":"Invalid count value: -181","stack":"RangeError: Invalid count value: -181\n    at String.repeat (<anonymous>)\n    at WebSocket.<anonymous> (D:\\iot\\New folder\\kukka_arduino\\server.js:858:32)"}}
+{"timestamp":1777125184360,"type":"errors","deviceId":"ESP32_GREENHOUSE_01","data":{"error":"Invalid count value: -205","stack":"RangeError: Invalid count value: -205\n    at String.repeat (<anonymous>)\n    at WebSocket.<anonymous> (D:\\iot\\New folder\\kukka_arduino\\server.js:858:32)"}}
