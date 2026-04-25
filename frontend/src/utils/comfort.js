@@ -27,20 +27,9 @@ export function comfortEmoji(score) {
   return '😭'
 }
 
-/**
- * Map 0-1023 ESP32 sound level → estimated dB using a logarithmic scale.
- * Log scale gives realistic spread: quiet room ~20-40 dB, crying ~60-80 dB.
- *   Level   0 →  20 dB  (silence)
- *   Level   6 →  40 dB  (QUIET threshold)
- *   Level  20 →  51 dB  (LIGHT_ACTIVITY threshold)
- *   Level  40 →  58 dB  (RESTLESS threshold)
- *   Level  67 →  63 dB  (typical mild cry)
- *   Level 200 →  74 dB  (strong cry)
- *   Level 1023 → 90 dB  (maximum)
- */
+/** Map 0-1023 ESP32 sound level → estimated dB (25-85 dB) */
 export function soundToDb(level) {
-  if (level <= 0) return 20
-  return Math.round(20 + (Math.log10(1 + level) / Math.log10(1024)) * 70)
+  return Math.round(25 + (level / 1023) * 60)
 }
 
 export function soundEventLabel(event) {
