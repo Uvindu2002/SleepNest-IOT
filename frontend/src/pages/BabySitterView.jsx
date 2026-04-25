@@ -367,10 +367,10 @@ export default function BabySitterView() {
             </div>
           </div>
           {[
-            { label: 'Silent 😴',   range: 'Quiet',          color: '#3B9E72', active: soundEvent === 'QUIET' },
-            { label: 'Quiet ✅',    range: 'Light Activity',  color: '#0EA5E9', active: soundEvent === 'LIGHT_ACTIVITY' },
-            { label: 'Moderate 🔉', range: 'Restless',        color: '#F59E0B', active: soundEvent === 'RESTLESS' },
-            { label: 'Loud ⚠️',     range: 'Crying',          color: '#EF4444', active: soundEvent === 'CRYING' },
+            { label: 'Silent 😴',   range: '< 40 dB',    color: '#3B9E72', active: soundEvent === 'QUIET' },
+            { label: 'Quiet ✅',    range: '40 – 51 dB', color: '#0EA5E9', active: soundEvent === 'LIGHT_ACTIVITY' },
+            { label: 'Moderate 🔉', range: '51 – 58 dB', color: '#F59E0B', active: soundEvent === 'RESTLESS' },
+            { label: 'Loud ⚠️',     range: '58+ dB',     color: '#EF4444', active: soundEvent === 'CRYING' },
           ].map(({ label, range, color, active }) => (
             <div key={label} className={`flex items-center justify-between px-3 py-1.5 rounded-lg mb-1.5 transition-all ${active ? 'shadow-sm' : 'opacity-40'}`}
               style={active ? { backgroundColor: color + '18', border: `1px solid ${color}55` } : { border: '1px solid transparent' }}>
