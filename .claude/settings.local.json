@@ -4,7 +4,22 @@
       "Bash(echo \"Test\")",
       "Read(//tmp/**)",
       "Bash(cat)",
-      "Bash(cp /tmp/part1.md \"/d/iot/New folder/kukka_arduino/CLAUDE.md\")"
+      "Bash(cp /tmp/part1.md \"/d/iot/New folder/kukka_arduino/CLAUDE.md\")",
+      "Bash(python -c ' *)",
+      "Bash(python generate_dataset.py)",
+      "Bash(python -c \"import sklearn; print\\('sklearn', sklearn.__version__\\)\")",
+      "Bash(python -c \"import xgboost; print\\('xgboost', xgboost.__version__\\)\")",
+      "Bash(python -c \"import skl2onnx; print\\('skl2onnx ok'\\)\")",
+      "Bash(python -c \"import onnxruntime; print\\('onnxruntime ok'\\)\")",
+      "Bash(python -c \"import pandas; print\\('pandas', pandas.__version__\\)\")",
+      "Bash(pip install *)",
+      "Bash(python train_model.py)",
+      "Bash(python -c \"import sys; print\\(sys.stdout.encoding\\)\")",
+      "Bash(node -e \"require\\('onnxruntime-node'\\); console.log\\('ok'\\)\")",
+      "Bash(npm install *)",
+      "Bash(node -e ' *)",
+      "Bash(node --check server.js)",
+      "Bash(npm run *)"
     ]
   }
 }
