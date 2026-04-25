@@ -1,0 +1,40 @@
+{
+  "model_name": "Random Forest",
+  "features": [
+    "sound.avg",
+    "sound.max",
+    "sound.last",
+    "sound_range",
+    "sound_stability",
+    "soundHist.QUIET",
+    "soundHist.LIGHT_ACTIVITY",
+    "soundHist.RESTLESS",
+    "soundHist.CRYING",
+    "hist_cry_ratio",
+    "motion.samplesActive",
+    "motion.durationMs",
+    "motion_active_ratio",
+    "temp.avg",
+    "humidity.avg",
+    "light.avg",
+    "comfort.avg",
+    "hour_sin",
+    "hour_cos"
+  ],
+  "classes": [
+    "CRYING",
+    "LIGHT_ACTIVITY",
+    "QUIET",
+    "RESTLESS"
+  ],
+  "label_encoder_mapping": {
+    "0": "CRYING",
+    "1": "LIGHT_ACTIVITY",
+    "2": "QUIET",
+    "3": "RESTLESS"
+  },
+  "test_accuracy": 1.0,
+  "test_f1_macro": 1.0,
+  "onnx_file": "model/sleepnest_classifier.onnx",
+  "feature_count": 19
+}

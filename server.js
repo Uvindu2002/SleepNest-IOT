@@ -12,6 +12,9 @@ const { connectMongo, getDb } = require('./db/mongo');
 const { dataBuffer }          = require('./db/DataBuffer');
 const { startAggregator }     = require('./db/Aggregator');
 
+// ── ML Predictor ─────────────────────────────────────────────────
+const mlPredictor = require('./ml/MLPredictor');
+
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
@@ -598,7 +601,7 @@ wss.on('connection', (ws, req) => {
   
   let currentDeviceId = null;
   
-  ws.on('message', (message) => {
+  ws.on('message', async (message) => {
     try {
       const data = JSON.parse(message);
       
@@ -687,9 +690,28 @@ wss.on('connection', (ws, req) => {
           
           const soundLevel = adaptedData.sound || 0;
           const percentage = Math.min(100, Math.round((soundLevel / 1023) * 100));
-          
-          let soundEvent = adaptedData.sound_alert || 'QUIET';
-          if (soundEvent === 'CRYING DETECTED! ⚠️') soundEvent = 'CRYING';
+
+          // ── ML classification (replaces threshold logic) ──────────
+          const comfort = (() => {
+            const t = adaptedData.temperature || 0;
+            const h = adaptedData.humidity || 0;
+            const tScore = Math.max(0, 100 - Math.abs(t - 20) * 8);
+            const hScore = Math.max(0, 100 - Math.abs(h - 50) * 2.5);
+            const sScore = Math.max(0, 100 - (soundLevel / 1023) * 100);
+            return Math.round(tScore * 0.35 + hScore * 0.25 + sScore * 0.40);
+          })();
+
+          const mlResult = await mlPredictor.predict(currentDeviceId, {
+            sound:           soundLevel,
+            temp:            adaptedData.temperature || 0,
+            humidity:        adaptedData.humidity    || 0,
+            light:           adaptedData.light       || 0,
+            comfort,
+            motion:          adaptedData.motion      || 0,
+            motionDurationMs: adaptedData.motion_duration || 0,
+          });
+
+          let soundEvent = mlResult.event || 'QUIET';
           
           // Enhanced data storage
           device.data = {
@@ -711,6 +733,10 @@ wss.on('connection', (ws, req) => {
             
             sound_percentage: percentage,
             sound_event: soundEvent,
+            ml_source: mlResult.source,
+            ml_confidence: mlResult.confidence,
+            ml_confidences: mlResult.confidences,
+            ml_window_size: mlResult.windowSize,
             sound_peak: processedSound ? processedSound.peak : 0,
             sound_energy: processedSound ? processedSound.energy : 0,
             sound_stability: processedSound ? processedSound.stability : 100,
@@ -835,7 +861,8 @@ wss.on('connection', (ws, req) => {
           else if (soundEvent === 'RESTLESS') eventIcon = '🟡';
           else if (soundEvent === 'LIGHT_ACTIVITY') eventIcon = '🟢';
           
-          console.log(`📊 [${currentDeviceId}] T=${adaptedData.temperature?.toFixed(1)}°C | H=${adaptedData.humidity?.toFixed(1)}% | M=${adaptedData.motion} | S=${percentage}% (${soundLevel}) ${soundBar} ${eventIcon} ${soundEvent} | L=${adaptedData.light} | Cry:${device.data.audio_crying ? '🔴' : '⚪'}`);
+          const mlTag = mlResult.confidence !== null ? `[ML:${mlResult.confidence}%]` : '[TH]';
+          console.log(`📊 [${currentDeviceId}] T=${adaptedData.temperature?.toFixed(1)}°C | H=${adaptedData.humidity?.toFixed(1)}% | M=${adaptedData.motion} | S=${percentage}% (${soundLevel}) ${soundBar} ${eventIcon} ${soundEvent} ${mlTag} | L=${adaptedData.light}`);
         }
       }
       
@@ -873,6 +900,7 @@ wss.on('connection', (ws, req) => {
         device.ws = null;
         device.disconnectedAt = Date.now();
       }
+      mlPredictor.resetWindow(currentDeviceId);
     }
   });
   
@@ -939,6 +967,11 @@ setInterval(() => {
   
   console.log('='.repeat(50));
 }, 3600000);
+
+// ── ML status endpoint ────────────────────────────────────────────
+app.get('/api/ml/status', (req, res) => {
+  res.json(mlPredictor.status());
+});
 
 // ── Database API endpoints ────────────────────────────────────────
 
