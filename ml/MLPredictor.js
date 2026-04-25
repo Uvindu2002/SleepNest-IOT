@@ -21,7 +21,7 @@ const WINDOW_SIZE = 15;   // matches sampleCount used during training
 
 // Threshold fallback — calibrated for INMP441 ambient noise floor ~50-80
 // These can be updated at runtime via setThresholds()
-let THRESHOLDS = { QUIET: 100, LIGHT_ACTIVITY: 250, RESTLESS: 450, CRYING: 600 };
+let THRESHOLDS = { QUIET: 70, LIGHT_ACTIVITY: 110, RESTLESS: 250, CRYING: 400 };
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let session  = null;   // ort.InferenceSession

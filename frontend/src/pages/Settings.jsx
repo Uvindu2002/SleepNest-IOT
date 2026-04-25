@@ -37,7 +37,7 @@ export default function Settings() {
   const [sensitivity, setSensitivity] = useState(5)
   const [toast, setToast] = useState(null)
   const [thresholds, setThresholds] = useState({
-    quiet: 100, lightActivity: 250, restless: 450, crying: 600,
+    quiet: 70, lightActivity: 110, restless: 250, crying: 400,
   })
 
   // Load current thresholds from server on mount

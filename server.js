@@ -57,10 +57,10 @@ const CONFIG = {
   alertCooldown: 5000, // ms between same type alerts
   motionCooldown: 2000, // ms between motion alerts
   soundThresholds: {
-    QUIET:          _saved.soundThresholds?.QUIET          ?? 100,
-    LIGHT_ACTIVITY: _saved.soundThresholds?.LIGHT_ACTIVITY ?? 250,
-    RESTLESS:       _saved.soundThresholds?.RESTLESS       ?? 450,
-    CRYING:         _saved.soundThresholds?.CRYING         ?? 600,
+    QUIET:          _saved.soundThresholds?.QUIET          ?? 70,
+    LIGHT_ACTIVITY: _saved.soundThresholds?.LIGHT_ACTIVITY ?? 110,
+    RESTLESS:       _saved.soundThresholds?.RESTLESS       ?? 250,
+    CRYING:         _saved.soundThresholds?.CRYING         ?? 400,
   },
   sensitivityRange: {
     min: 1,
