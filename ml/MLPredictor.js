@@ -19,8 +19,8 @@ const MODEL_PATH = path.join(__dirname, '..', 'model', 'sleepnest_classifier.onn
 const META_PATH  = path.join(__dirname, '..', 'model', 'model_meta.json');
 const WINDOW_SIZE = 15;   // matches sampleCount used during training
 
-// Threshold fallback (original CONFIG values)
-const THRESHOLDS = { QUIET: 6, LIGHT_ACTIVITY: 20, RESTLESS: 40, CRYING: 60 };
+// Threshold fallback — calibrated for INMP441 ambient noise floor ~50-80
+const THRESHOLDS = { QUIET: 150, LIGHT_ACTIVITY: 350, RESTLESS: 600, CRYING: 700 };
 
 // ── Module state ─────────────────────────────────────────────────────────────
 let session  = null;   // ort.InferenceSession
