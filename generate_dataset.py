@@ -52,57 +52,73 @@ def compute_comfort(temp, humidity, sound_avg, motion_ms):
     penalty = 10 if motion_ms > 15000 else (5 if motion_ms > 5000 else 0)
     return round(clamp(temp_score * 0.35 + hum_score * 0.25 + sound_score * 0.40 - penalty, 0, 100), 1)
 
+# ── Thresholds — must match MLPredictor.js THRESHOLDS ────────────────────────
+# QUIET < 70 | LIGHT_ACTIVITY 70-109 | RESTLESS 110-249 | CRYING 400+
+# Note: soundHist.CRYING bucket = samples >= RESTLESS threshold (250), not 400
+THR_QUIET = 70
+THR_LA    = 110
+THR_REST  = 250   # this is what shCry counts in MLPredictor feature engineering
+THR_CRYING= 400
+
 # ── Per-class sensor profiles ─────────────────────────────────────────────────
 PROFILES = {
     "QUIET": {
-        "sound_avg_c": 18,   "sound_avg_s": 6,
-        "sound_max_c": 40,   "sound_max_s": 15,
+        # Sound well below 70 — ambient room noise
+        "sound_avg_c": 28,   "sound_avg_s": 10,
+        "sound_max_c": 55,   "sound_max_s": 12,
         "motion_active_range": (0, 2),
         "motion_ms_range":     (0, 1500),
         "soundHist": lambda: {
-            "QUIET": random.randint(10, 15),
-            "LIGHT_ACTIVITY": random.randint(0, 3),
+            # Almost all 15 samples land in QUIET bucket (< 70)
+            "QUIET": random.randint(12, 15),
+            "LIGHT_ACTIVITY": random.randint(0, 2),
             "RESTLESS": 0,
             "CRYING": 0,
         },
         "lastRaw_event": "Quiet",
     },
     "LIGHT_ACTIVITY": {
-        "sound_avg_c": 42,   "sound_avg_s": 12,
-        "sound_max_c": 110,  "sound_max_s": 30,
+        # Sound in 70-109 range — baby stirring
+        "sound_avg_c": 88,   "sound_avg_s": 13,
+        "sound_max_c": 160,  "sound_max_s": 30,
         "motion_active_range": (2, 7),
         "motion_ms_range":     (1500, 8000),
         "soundHist": lambda: {
-            "QUIET": random.randint(0, 5),
-            "LIGHT_ACTIVITY": random.randint(8, 14),
+            "QUIET": random.randint(0, 3),
+            # Most samples in LIGHT_ACTIVITY bucket (70-109)
+            "LIGHT_ACTIVITY": random.randint(9, 13),
             "RESTLESS": random.randint(0, 2),
             "CRYING": 0,
         },
         "lastRaw_event": "Light Activity",
     },
     "RESTLESS": {
-        "sound_avg_c": 72,   "sound_avg_s": 18,
-        "sound_max_c": 190,  "sound_max_s": 50,
+        # Sound in 110-249 range — baby fussing
+        "sound_avg_c": 175,  "sound_avg_s": 40,
+        "sound_max_c": 310,  "sound_max_s": 60,
         "motion_active_range": (5, 12),
         "motion_ms_range":     (8000, 22000),
         "soundHist": lambda: {
-            "QUIET": random.randint(0, 2),
-            "LIGHT_ACTIVITY": random.randint(2, 5),
-            "RESTLESS": random.randint(7, 12),
-            "CRYING": random.randint(0, 3),
+            "QUIET": random.randint(0, 1),
+            "LIGHT_ACTIVITY": random.randint(1, 4),
+            # Most samples in RESTLESS bucket (110-249)
+            "RESTLESS": random.randint(8, 12),
+            "CRYING": random.randint(0, 2),
         },
         "lastRaw_event": "Restless",
     },
     "CRYING": {
-        "sound_avg_c": 220,  "sound_avg_s": 80,
-        "sound_max_c": 600,  "sound_max_s": 200,
+        # Sound 400+ — actual crying
+        "sound_avg_c": 530,  "sound_avg_s": 120,
+        "sound_max_c": 820,  "sound_max_s": 150,
         "motion_active_range": (8, 15),
         "motion_ms_range":     (15000, 30000),
         "soundHist": lambda: {
             "QUIET": 0,
-            "LIGHT_ACTIVITY": random.randint(0, 2),
-            "RESTLESS": random.randint(0, 3),
-            "CRYING": random.randint(11, 15),
+            "LIGHT_ACTIVITY": 0,
+            "RESTLESS": random.randint(0, 2),
+            # Almost all samples >= 250 (shCry uses RESTLESS threshold)
+            "CRYING": random.randint(12, 15),
         },
         "lastRaw_event": "CRYING",
     },
