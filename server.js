@@ -26,6 +26,30 @@ const deviceStats = new Map();
 const soundEvents = new Map();
 const soundAlerts = new Map();
 
+// ── Persistent config (saved to disk) ────────────────────────────
+const CONFIG_PATH = path.join(__dirname, 'config.json');
+
+function loadPersistedConfig() {
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    }
+  } catch (e) {
+    console.warn('[Config] Could not read config.json, using defaults:', e.message);
+  }
+  return {};
+}
+
+function savePersistedConfig(data) {
+  try {
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('[Config] Could not write config.json:', e.message);
+  }
+}
+
+const _saved = loadPersistedConfig();
+
 // Configuration
 const CONFIG = {
   maxHistorySize: 5000,
@@ -33,10 +57,10 @@ const CONFIG = {
   alertCooldown: 5000, // ms between same type alerts
   motionCooldown: 2000, // ms between motion alerts
   soundThresholds: {
-    QUIET: 100,
-    LIGHT_ACTIVITY: 250,
-    RESTLESS: 450,
-    CRYING: 600
+    QUIET:          _saved.soundThresholds?.QUIET          ?? 100,
+    LIGHT_ACTIVITY: _saved.soundThresholds?.LIGHT_ACTIVITY ?? 250,
+    RESTLESS:       _saved.soundThresholds?.RESTLESS       ?? 450,
+    CRYING:         _saved.soundThresholds?.CRYING         ?? 600,
   },
   sensitivityRange: {
     min: 1,
@@ -980,13 +1004,15 @@ app.get('/api/settings/thresholds', (req, res) => {
 
 app.post('/api/settings/thresholds', (req, res) => {
   const { quiet, lightActivity, restless, crying } = req.body;
-  if (quiet        != null) CONFIG.soundThresholds.QUIET          = Number(quiet);
+  if (quiet         != null) CONFIG.soundThresholds.QUIET          = Number(quiet);
   if (lightActivity != null) CONFIG.soundThresholds.LIGHT_ACTIVITY = Number(lightActivity);
-  if (restless     != null) CONFIG.soundThresholds.RESTLESS       = Number(restless);
-  if (crying       != null) CONFIG.soundThresholds.CRYING         = Number(crying);
+  if (restless      != null) CONFIG.soundThresholds.RESTLESS       = Number(restless);
+  if (crying        != null) CONFIG.soundThresholds.CRYING         = Number(crying);
   // Propagate to ML predictor fallback
   mlPredictor.setThresholds(CONFIG.soundThresholds);
-  console.log('[Settings] Sound thresholds updated:', CONFIG.soundThresholds);
+  // Persist to disk so settings survive server restarts
+  savePersistedConfig({ soundThresholds: CONFIG.soundThresholds });
+  console.log('[Settings] Sound thresholds saved:', CONFIG.soundThresholds);
   res.json({ ok: true, thresholds: CONFIG.soundThresholds });
 });
 
