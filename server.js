@@ -75,6 +75,7 @@ const CONFIG = {
 
 app.use(express.json());
 app.use(express.static('public'));
+app.use('/reports', express.static('model/report'));
 
 // Create logs directory
 if (!fs.existsSync('./logs')) {

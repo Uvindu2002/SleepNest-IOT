@@ -1,0 +1,14 @@
+{
+  "k": 3,
+  "silhouette": 0.4243,
+  "cluster_names": {
+    "0": "Light Sleep",
+    "1": "Light Sleep",
+    "2": "Restless"
+  },
+  "cluster_sizes": {
+    "0": 924,
+    "1": 1314,
+    "2": 1075
+  }
+}

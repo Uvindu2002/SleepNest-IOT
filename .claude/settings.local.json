@@ -19,7 +19,21 @@
       "Bash(npm install *)",
       "Bash(node -e ' *)",
       "Bash(node --check server.js)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(python model_report.py)",
+      "Bash(python export_dataset.py)",
+      "Bash(python analysis_trend.py)",
+      "Bash(python analysis_correlation.py)",
+      "Bash(python analysis_anomaly.py)",
+      "Bash(dir \"D:\\\\iot\\\\New folder\\\\kukka_arduino\\\\model\\\\report\")",
+      "Bash(python -c \"import PyPDF2; r=PyPDF2.PdfReader\\('Final Evaluation Published.pdf'\\); [print\\(r.pages[i].extract_text\\(\\)\\) for i in range\\(len\\(r.pages\\)\\)]\")",
+      "Bash(python -c \"import pdfplumber; pdf=pdfplumber.open\\('Final Evaluation Published.pdf'\\); [print\\(p.extract_text\\(\\)\\) for p in pdf.pages]\")",
+      "Bash(python analysis_clustering.py)",
+      "Bash(python -c \"import reportlab; print\\('reportlab ok'\\)\")",
+      "Bash(python -c \"import fpdf; print\\('fpdf ok'\\)\")",
+      "Bash(python -c \"import fpdf2; print\\('fpdf2 ok'\\)\")",
+      "Bash(node -e \"require\\('pptxgenjs'\\); console.log\\('ok'\\)\")",
+      "Bash(python generate_slides.py)"
     ]
   }
 }

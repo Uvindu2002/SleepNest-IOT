@@ -1,13 +1,17 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { SensorProvider } from './context/SensorContext'
 import Layout from './components/layout/Layout'
-import Overview     from './pages/Overview'
-import Monitoring   from './pages/Monitoring'
-import Sleep        from './pages/Sleep'
-import Alerts       from './pages/Alerts'
-import History      from './pages/History'
-import BabySitter   from './pages/BabySitterView'
-import Settings     from './pages/Settings'
+import Overview            from './pages/Overview'
+import Monitoring          from './pages/Monitoring'
+import Sleep               from './pages/Sleep'
+import Alerts              from './pages/Alerts'
+import History             from './pages/History'
+import BabySitter          from './pages/BabySitterView'
+import Settings            from './pages/Settings'
+import AnalyseTrend        from './pages/AnalyseTrend'
+import AnalyseCorrelation  from './pages/AnalyseCorrelation'
+import AnalyseAnomaly      from './pages/AnalyseAnomaly'
+import AnalyseClustering   from './pages/AnalyseClustering'
 
 export default function App() {
   return (
@@ -23,6 +27,11 @@ export default function App() {
             <Route path="history"     element={<History />} />
             <Route path="babysitter"  element={<BabySitter />} />
             <Route path="settings"    element={<Settings />} />
+            {/* Analyse section */}
+            <Route path="analyse/trend"        element={<AnalyseTrend />} />
+            <Route path="analyse/correlation"  element={<AnalyseCorrelation />} />
+            <Route path="analyse/anomaly"      element={<AnalyseAnomaly />} />
+            <Route path="analyse/clustering"   element={<AnalyseClustering />} />
           </Route>
         </Routes>
       </BrowserRouter>

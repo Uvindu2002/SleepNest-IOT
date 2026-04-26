@@ -10,6 +10,31 @@ const NAV = [
   { to: '/settings',   icon: '⚙️', label: 'Settings' },
 ]
 
+const ANALYSE_NAV = [
+  { to: '/analyse/trend',       icon: '📈', label: 'Trend Analysis' },
+  { to: '/analyse/correlation', icon: '🔗', label: 'Correlation' },
+  { to: '/analyse/anomaly',     icon: '🚨', label: 'Anomaly Detection' },
+  { to: '/analyse/clustering',  icon: '🔵', label: 'Behavior Patterns' },
+]
+
+function NavItem({ to, icon, label }) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+          isActive
+            ? 'bg-accent-nav text-white shadow shadow-green-200 dark:shadow-none'
+            : 'text-gray-500 dark:text-gray-400 hover:bg-nest-cream dark:hover:bg-[#1E2236] hover:text-gray-800 dark:hover:text-gray-100'
+        }`
+      }
+    >
+      <span className="text-[1rem] w-5 text-center flex-shrink-0">{icon}</span>
+      <span className="leading-none">{label}</span>
+    </NavLink>
+  )
+}
+
 export default function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 h-screen w-[210px] bg-white dark:bg-[#161928] border-r border-nest-border dark:border-[#2A2E4A] flex flex-col z-20 transition-colors">
@@ -25,21 +50,19 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto">
+        {/* Main nav */}
         {NAV.map(({ to, icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                isActive
-                  ? 'bg-accent-nav text-white shadow shadow-green-200 dark:shadow-none'
-                  : 'text-gray-500 dark:text-gray-400 hover:bg-nest-cream dark:hover:bg-[#1E2236] hover:text-gray-800 dark:hover:text-gray-100'
-              }`
-            }
-          >
-            <span className="text-[1rem] w-5 text-center flex-shrink-0">{icon}</span>
-            <span className="leading-none">{label}</span>
-          </NavLink>
+          <NavItem key={to} to={to} icon={icon} label={label} />
+        ))}
+
+        {/* Analyse section */}
+        <div className="mt-4 mb-1 px-3">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+            Analyse
+          </span>
+        </div>
+        {ANALYSE_NAV.map(({ to, icon, label }) => (
+          <NavItem key={to} to={to} icon={icon} label={label} />
         ))}
       </nav>
     </aside>
