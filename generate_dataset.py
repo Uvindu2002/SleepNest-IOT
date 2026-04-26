@@ -22,8 +22,9 @@ random.seed(99)
 
 # ── Config ──────────────────────────────────────────────────────────────────
 ROWS_PER_CLASS  = 2500          # 2500 x 4 = 10,000 rows total
-BORDERLINE_RATE = 0.08          # 8% of each class = samples near boundaries
-OUTLIER_RATE    = 0.03          # 3% random outlier spikes
+BORDERLINE_RATE = 0.25          # 25% of each class = samples near boundaries
+OUTLIER_RATE    = 0.10          # 10% random outlier spikes
+LABEL_NOISE     = 0.06          # 6% samples get adjacent class label (real-world mislabels)
 START_TIME      = datetime(2026, 4, 1, 0, 0, 0)
 INTERVAL_SECONDS = 30
 DEVICE_ID       = "ESP32_GREENHOUSE_01"
@@ -69,51 +70,57 @@ def compute_comfort(temp, humidity, sound_avg, motion_ms):
     penalty = 10 if motion_ms > 15000 else (5 if motion_ms > 5000 else 0)
     return round(clamp(temp_score * 0.35 + hum_score * 0.25 + sound_score * 0.40 - penalty, 0, 100), 1)
 
-def noisy_hist(primary_bucket, total=15, noise_level=2):
-    """Generate soundHist counts with realistic noise — not perfectly aligned."""
+def noisy_hist(primary_bucket, total=15):
+    """Generate soundHist counts with heavy noise — not perfectly aligned."""
     buckets = ["QUIET", "LIGHT_ACTIVITY", "RESTLESS", "CRYING"]
     result = {b: 0 for b in buckets}
-    # Primary bucket gets most samples
-    primary_count = random.randint(total - 4, total)
+    # Primary bucket gets fewer guaranteed samples (more spread)
+    primary_count = random.randint(total - 8, total - 1)
     result[primary_bucket] = primary_count
     remaining = total - primary_count
-    # Spread remaining across other buckets randomly
     others = [b for b in buckets if b != primary_bucket]
     for _ in range(remaining):
         result[random.choice(others)] += 1
     return result
 
+ADJACENT = {
+    "QUIET":          ["LIGHT_ACTIVITY"],
+    "LIGHT_ACTIVITY": ["QUIET", "RESTLESS"],
+    "RESTLESS":       ["LIGHT_ACTIVITY", "CRYING"],
+    "CRYING":         ["RESTLESS"],
+}
+
 # ── Per-class sensor profiles — calibrated from real data ────────────────────
 PROFILES = {
     "QUIET": {
-        # Real: sound.avg ~48, sound.max ~107
-        "sound_avg_c": 42,   "sound_avg_s": 14,
-        "sound_max_c": 95,   "sound_max_s": 25,
-        "motion_active_range": (0, 1),    # real data: almost always 0
+        # Wider spread — overlaps into LIGHT_ACTIVITY territory
+        "sound_avg_c": 42,   "sound_avg_s": 22,
+        "sound_max_c": 95,   "sound_max_s": 40,
+        "motion_active_range": (0, 1),
         "motion_ms_range":     (0, 500),
         "hist_primary": "QUIET",
     },
     "LIGHT_ACTIVITY": {
-        # Real: sound.avg ~100-153, sound.max ~200-386
-        "sound_avg_c": 118,  "sound_avg_s": 28,
-        "sound_max_c": 270,  "sound_max_s": 70,
+        # Wider — overlaps both QUIET and RESTLESS
+        "sound_avg_c": 118,  "sound_avg_s": 45,
+        "sound_max_c": 270,  "sound_max_s": 90,
         "motion_active_range": (0, 3),
         "motion_ms_range":     (0, 3000),
         "hist_primary": "LIGHT_ACTIVITY",
     },
     "RESTLESS": {
-        # Real: sound.avg ~85-219, sound.max ~140-541
-        "sound_avg_c": 195,  "sound_avg_s": 55,
-        "sound_max_c": 450,  "sound_max_s": 100,
+        # Wider — overlaps both LIGHT_ACTIVITY and CRYING
+        "sound_avg_c": 195,  "sound_avg_s": 80,
+        "sound_max_c": 450,  "sound_max_s": 140,
         "motion_active_range": (0, 4),
         "motion_ms_range":     (0, 8000),
         "hist_primary": "RESTLESS",
     },
     "CRYING": {
-        # Real: sound.avg ~257, sound.max ~572
-        "sound_avg_c": 420,  "sound_avg_s": 130,
-        "sound_max_c": 700,  "sound_max_s": 170,
-        "motion_active_range": (0, 3),    # real data: motion still low
+        # Wider — some samples look like RESTLESS
+        "sound_avg_c": 420,  "sound_avg_s": 180,
+        "sound_max_c": 700,  "sound_max_s": 200,
+        "motion_active_range": (0, 3),
         "motion_ms_range":     (0, 2000),
         "hist_primary": "CRYING",
     },
@@ -206,6 +213,11 @@ for label in CLASSES:
         # sampleCount 13–15 (real data varies)
         sample_count = random.choices([13, 14, 15], weights=[1, 4, 5])[0]
 
+        # Label noise — flip 6% of samples to an adjacent class
+        final_label = label
+        if random.random() < LABEL_NOISE:
+            final_label = random.choice(ADJACENT[label])
+
         row = {
             "_id":                      f"synthetic_{_id_counter:06d}",
             "deviceId":                 DEVICE_ID,
@@ -225,7 +237,7 @@ for label in CLASSES:
             "sound.avg":                s_avg,
             "sound.max":                s_max,
             "sound.last":               s_last,
-            "sound.event":              label,
+            "sound.event":              final_label,
 
             "comfort.avg":              comfort_avg,
             "comfort.last":             comfort_last,
