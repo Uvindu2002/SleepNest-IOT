@@ -1,4 +1,72 @@
+import { useRef, useEffect } from 'react'
 import { useSensor } from '../context/SensorContext'
+import {
+  Chart, BarController, BarElement,
+  LinearScale, CategoryScale, Tooltip, Legend,
+} from 'chart.js'
+
+Chart.register(BarController, BarElement, LinearScale, CategoryScale, Tooltip, Legend)
+
+function SoundBarChart({ soundDist }) {
+  const ref      = useRef(null)
+  const chartRef = useRef(null)
+
+  const LABELS = ['Quiet', 'Light Activity', 'Restless', 'Crying']
+  const KEYS   = ['QUIET', 'LIGHT_ACTIVITY', 'RESTLESS', 'CRYING']
+  const COLORS = ['#3B9E72', '#5A52E0', '#F59E0B', '#EF4444']
+
+  useEffect(() => {
+    const ctx = ref.current.getContext('2d')
+    chartRef.current = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: LABELS,
+        datasets: [{
+          label: 'Count',
+          data: KEYS.map(k => soundDist[k] || 0),
+          backgroundColor: COLORS.map(c => c + 'CC'),
+          borderColor: COLORS,
+          borderWidth: 2,
+          borderRadius: 6,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${ctx.parsed.y} readings`,
+            },
+          },
+        },
+        scales: {
+          x: { ticks: { color: '#94A3B8', font: { size: 10 } }, grid: { color: '#2A2E4A' } },
+          y: { ticks: { color: '#94A3B8', font: { size: 10 } }, grid: { color: '#2A2E4A' }, beginAtZero: true },
+        },
+      },
+    })
+    return () => chartRef.current?.destroy()
+  }, [])
+
+  useEffect(() => {
+    if (!chartRef.current) return
+    chartRef.current.data.datasets[0].data = KEYS.map(k => soundDist[k] || 0)
+    chartRef.current.update('none')
+  }, [soundDist])
+
+  return (
+    <div className="bg-white dark:bg-[#1E2236] rounded-2xl border border-nest-border dark:border-[#2A2E4A] p-4 shadow-sm">
+      <div className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">
+        Sound Event Count — Bar Chart
+      </div>
+      <div style={{ height: 160 }}>
+        <canvas ref={ref} />
+      </div>
+    </div>
+  )
+}
 
 const SOUND_ROWS = [
   { label: '😴 Quiet',          key: 'QUIET',          bar: 'bg-accent'     },
@@ -107,14 +175,8 @@ export default function Sleep() {
             </div>
           </div>
 
-          {/* Info note */}
-          <div className="bg-nest-cream dark:bg-[#1A1D2E] border border-dashed border-nest-border dark:border-[#2A2E4A] rounded-2xl p-4 text-center flex-shrink-0">
-            <div className="text-2xl mb-2">📊</div>
-            <div className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">More data needed for overnight analysis</div>
-            <div className="text-[11px] text-gray-400 leading-relaxed">
-              Keep the monitor running while baby sleeps to collect overnight patterns.
-            </div>
-          </div>
+          {/* Bar chart — sound event counts */}
+          <SoundBarChart soundDist={soundDist} />
 
         </div>
       </div>
